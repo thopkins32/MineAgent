@@ -145,19 +145,30 @@ public class NetworkHandler implements Runnable {
   private void handleReceiveClient(SocketChannel clientSocket) {
     receiverExecutor.submit(
         () -> {
-          try (BufferedReader in =
-                  new BufferedReader(
-                      new InputStreamReader(clientSocket.socket().getInputStream()));
-              PrintWriter out = new PrintWriter(clientSocket.socket().getOutputStream(), true)) {
+          try {
+            clientSocket.configureBlocking(true);
+            ByteBuffer actionBuffer = ByteBuffer.allocate(11); // Action is exactly 11 bytes
+            
+            while (this.running.get()) {
+              actionBuffer.clear();
+              
+              // Read exactly 11 bytes for one Action
+              int totalBytesRead = 0;
+              while (totalBytesRead < 11) {
+                int bytesRead = clientSocket.read(actionBuffer);
+                if (bytesRead == -1) {
+                  // Client disconnected
+                  LOGGER.info("Client disconnected");
+                  return;
+                }
+                totalBytesRead += bytesRead;
+              }
 
-            String inputLine;
-            while ((inputLine = in.readLine()) != null && this.running.get()) {
-              final String command = inputLine;
-              // Process each command asynchronously to avoid blocking
-              CompletableFuture.runAsync(() -> processCommand(command, out), receiverExecutor)
+              // Process each action asynchronously to avoid blocking
+              CompletableFuture.runAsync(() -> processCommand(actionBuffer), receiverExecutor)
                   .exceptionally(
                       throwable -> {
-                        LOGGER.error("Error processing command: " + command, throwable);
+                        LOGGER.error("Error processing action: " + actionBuffer, throwable);
                         return null;
                       });
             }
@@ -207,7 +218,6 @@ public class NetworkHandler implements Runnable {
   }
 
   private void sendObservationImmediate(Observation observation, SocketChannel clientSocket) {
-    LOGGER.info("Sending observation to client");
     try {
       int totalSize = 8 + observation.frameBuffer.length;
       ByteBuffer buffer = ByteBuffer.allocate(totalSize);
@@ -224,13 +234,17 @@ public class NetworkHandler implements Runnable {
     }
   }
 
-  private void processCommand(String command, PrintWriter out) {
-    LOGGER.info("Received command: " + command);
+  private void processCommand(ByteBuffer actionBuffer) {
+    final Action action = Action.fromBytes(actionBuffer.array());
+    DataBridge.getInstance().setLatestAction(action);
   }
 
   private void cleanup() {
     LOGGER.info("Shutting down NetworkHandler...");
     this.running.set(false);
+    
+    // Release all pressed keys on cleanup
+    ClientEventHandler.releaseAllKeys();
     // Wait for threads to finish
     if (this.sendThread != null) {
       try {

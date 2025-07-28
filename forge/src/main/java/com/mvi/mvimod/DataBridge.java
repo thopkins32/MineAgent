@@ -2,11 +2,16 @@ package com.mvi.mvimod;
 
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DataBridge {
   private static final Logger LOGGER = LogUtils.getLogger();
   private static DataBridge instance;
   private NetworkHandler networkHandler;
+  
+  private final AtomicReference<Action> latestAction = new AtomicReference<Action>();
+  
+  private DataBridge() {}
 
   public static DataBridge getInstance() {
     if (instance == null) {
@@ -28,5 +33,13 @@ public class DataBridge {
     } else {
       LOGGER.warn("Cannot send frame - NetworkHandler is null");
     }
+  }
+  
+  public void setLatestAction(Action action) {
+    latestAction.set(action);
+  }
+
+  public Action getLatestAction() {
+    return latestAction.get();
   }
 }

@@ -1,13 +1,14 @@
 package com.mvi.mvimod;
 
-public record Observation(int reward, ActionState actionState, byte[] frame) {
+public record Observation(
+    int reward,
+    ActionState actionState,
+    byte[] frame
+) {
     public byte[] serialize() {
-        // TODO: Implement this
-        throw new UnsupportedOperationException("Not implemented");
-    }
-
-    public static Observation deserialize(byte[] data) {
-        // TODO: Implement this
-        throw new UnsupportedOperationException("Not implemented");
+        // For now, we'll keep the existing protocol that sends reward + frame
+        // The action state will be serialized separately later
+        // TODO: Implement full serialization including action state
+        return frame;
     }
 }
