@@ -238,7 +238,7 @@ def show_help():
     print("\n" + "=" * 60)
     print("MVI ACTION TEST CLIENT - COMMAND REFERENCE")
     print("=" * 60)
-    print("\nMOVEMENT COMMANDS (Auto-held until 'release'):")
+    print("\nMOVEMENT COMMANDS:")
     print("  w, forward      - Move forward")
     print("  s, back         - Move backward") 
     print("  a, left         - Move left")
@@ -248,12 +248,12 @@ def show_help():
     print("  ctrl, sprint    - Sprint")
     print()
     print("INTERACTION COMMANDS:")
-    print("  attack, lmb     - Attack/left mouse button (auto-held)")
-    print("  use, rmb        - Use/right mouse button (auto-held)")
-    print("  e, inventory    - Open inventory (instant)")
-    print("  q, drop         - Drop item (instant)")
-    print("  f, swap         - Swap offhand (instant)")
-    print("  pick            - Pick block (instant)")
+    print("  attack, lmb     - Attack/left mouse button")
+    print("  use, rmb        - Use/right mouse button")
+    print("  e, inventory    - Open inventory")
+    print("  q, drop         - Drop item")
+    print("  f, swap         - Swap offhand")
+    print("  pick            - Pick block")
     print()
     print("HOTBAR COMMANDS:")
     print("  1-8             - Select hotbar slots 1-8")
@@ -268,8 +268,6 @@ def show_help():
     print()
     print("SPECIAL COMMANDS:")
     print("  esc, exit       - Exit menu/GUI")
-    print("  hold <action>   - Explicitly hold action (for non-auto-held actions)")
-    print("  release         - Release all held actions")
     print("  combo <actions> - Execute multiple actions together")
     print()
     print("UTILITY COMMANDS:")
@@ -280,48 +278,35 @@ def show_help():
     print("  quit, exit, q   - Exit program")
     print("\nEXAMPLES:")
     print("  combo w space   - Move forward and jump")
-    print("  hold shift      - Start sneaking (no auto-release)")
     print("  mouse -10 5     - Turn left 10 units, look up 5 units")
     print("  turn 45         - Turn right 45 degrees")
     print("=" * 60)
 
 
-def parse_command(command_line: str) -> tuple[ActionState, bool, float, float, bool]:
+def parse_command(command_line: str) -> tuple[ActionState, bool, float, float]:
     """
     Parse command line input and return action components
-    Returns: (action_state, exit_menu, mouse_x, mouse_y, hold_action)
+    Returns: (action_state, exit_menu, mouse_x, mouse_y)
     """
     parts = command_line.strip().lower().split()
     if not parts:
-        return ActionState(), False, 0.0, 0.0, False
+        return ActionState(), False, 0.0, 0.0
     
     main_command = parts[0]
     action_state = ActionState()
     exit_menu = False
     mouse_x, mouse_y = 0.0, 0.0
-    hold_action = False
-    
-    # Movement and persistent actions that should auto-hold
-    persistent_actions = {
-        'w', 'forward', 's', 'back', 'a', 'left', 'd', 'right',
-        'space', 'jump', 'shift', 'sneak', 'ctrl', 'sprint',
-        'attack', 'lmb', 'use', 'rmb'
-    }
     
     # Handle special commands first
     if main_command in ["help", "h", "?"]:
         show_help()
-        return ActionState(), False, 0.0, 0.0, False
+        return ActionState(), False, 0.0, 0.0
     
     if main_command == "combo" and len(parts) > 1:
         # Execute multiple actions together
         for action_name in parts[1:]:
             _apply_action_to_state(action_state, action_name)
-        return action_state, exit_menu, mouse_x, mouse_y, False
-    
-    if main_command == "hold" and len(parts) > 1:
-        _apply_action_to_state(action_state, parts[1])
-        return action_state, exit_menu, mouse_x, mouse_y, True
+        return action_state, exit_menu, mouse_x, mouse_y
     
     if main_command == "mouse" and len(parts) >= 3:
         try:
@@ -329,28 +314,24 @@ def parse_command(command_line: str) -> tuple[ActionState, bool, float, float, b
             mouse_y = float(parts[2])
         except ValueError:
             print("✗ Invalid mouse coordinates. Use: mouse <x> <y>")
-        return action_state, exit_menu, mouse_x, mouse_y, False
+        return action_state, exit_menu, mouse_x, mouse_y
     
     if main_command == "turn" and len(parts) >= 2:
         try:
             mouse_x = float(parts[1])
         except ValueError:
             print("✗ Invalid turn amount. Use: turn <x>")
-        return action_state, exit_menu, mouse_x, mouse_y, False
+        return action_state, exit_menu, mouse_x, mouse_y
     
     if main_command == "look" and len(parts) >= 2:
         try:
             mouse_y = float(parts[1])
         except ValueError:
             print("✗ Invalid look amount. Use: look <y>")
-        return action_state, exit_menu, mouse_x, mouse_y, False
+        return action_state, exit_menu, mouse_x, mouse_y
     
     # Handle regular single actions
     _apply_action_to_state(action_state, main_command)
-    
-    # Auto-hold persistent actions
-    if main_command in persistent_actions:
-        hold_action = True
     
     # Handle special cases
     if main_command in ["esc", "exit"]:
@@ -364,7 +345,7 @@ def parse_command(command_line: str) -> tuple[ActionState, bool, float, float, b
     elif main_command == "mdown":
         mouse_y = 10.0
     
-    return action_state, exit_menu, mouse_x, mouse_y, hold_action
+    return action_state, exit_menu, mouse_x, mouse_y
 
 
 def _apply_action_to_state(action_state: ActionState, action_name: str):
@@ -424,7 +405,6 @@ def run_interactive_mode():
     """Run enhanced interactive mode for testing actions"""
     action_client = ActionTestClient()
     observation_client = ObservationTestClient()
-    held_actions = ActionState()  # Track held actions
     
     print("MVI Action Test Client - Interactive Mode")
     print("=" * 50)
@@ -441,8 +421,6 @@ def run_interactive_mode():
             obs_thread.start()
     
     print("\nInteractive Action Testing Started")
-    print("Movement commands (w/a/s/d/space/shift/ctrl) and attack/use are auto-held")
-    print("Use 'release' to stop all held actions")
     print("Type 'help' for command reference, 'quit' to exit")
     print("-" * 50)
     
@@ -464,97 +442,29 @@ def run_interactive_mode():
                 elif command_line.lower() == "clear":
                     print("\033[2J\033[H")  # Clear screen
                     continue
-                elif command_line.lower() == "release":
-                    # Release all held actions
-                    held_actions = ActionState()
-                    release_action = Action(ActionState())
-                    action_client.send_action(release_action)
-                    print("✓ Released all held actions")
-                    continue
+
                 elif command_line.lower() == "test":
                     print("Running quick test sequence...")
                     test_sequence = ["w", "a", "s", "d", "space", "attack"]
                     for test_cmd in test_sequence:
                         print(f"  Testing: {test_cmd}")
-                        action_state, exit_menu, mouse_x, mouse_y, _ = parse_command(test_cmd)
+                        action_state, exit_menu, mouse_x, mouse_y = parse_command(test_cmd)
                         action = Action(action_state, exit_menu, mouse_x, mouse_y)
                         action_client.send_action(action)
-                        time.sleep(0.2)
-                        # Auto-release for test
-                        action_client.send_action(Action(ActionState()))
-                        time.sleep(0.1)
+                        time.sleep(0.3)
                     print("✓ Test sequence completed")
                     continue
                 
                 # Parse the command
-                action_state, exit_menu, mouse_x, mouse_y, hold_action = parse_command(command_line)
+                action_state, exit_menu, mouse_x, mouse_y = parse_command(command_line)
                 
                 # Skip if it was just a help command
                 if command_line.lower() in ["help", "h", "?"]:
                     continue
                 
-                # Combine with held actions
-                if hold_action:
-                    # Add new action to held actions
-                    held_actions.up |= action_state.up
-                    held_actions.down |= action_state.down
-                    held_actions.left |= action_state.left
-                    held_actions.right |= action_state.right
-                    held_actions.jump |= action_state.jump
-                    held_actions.sneak |= action_state.sneak
-                    held_actions.sprint |= action_state.sprint
-                    held_actions.inventory |= action_state.inventory
-                    held_actions.drop |= action_state.drop
-                    held_actions.swap |= action_state.swap
-                    held_actions.use |= action_state.use
-                    held_actions.attack |= action_state.attack
-                    held_actions.pick_item |= action_state.pick_item
-                    held_actions.hotbar1 |= action_state.hotbar1
-                    held_actions.hotbar2 |= action_state.hotbar2
-                    held_actions.hotbar3 |= action_state.hotbar3
-                    held_actions.hotbar4 |= action_state.hotbar4
-                    held_actions.hotbar5 |= action_state.hotbar5
-                    held_actions.hotbar6 |= action_state.hotbar6
-                    held_actions.hotbar7 |= action_state.hotbar7
-                    held_actions.hotbar8 |= action_state.hotbar8
-                    
-                    final_action_state = held_actions
-                    print("✓ Action held (use 'release' to stop)")
-                else:
-                    # Combine one-time action with held actions
-                    final_action_state = ActionState(
-                        up=action_state.up or held_actions.up,
-                        down=action_state.down or held_actions.down,
-                        left=action_state.left or held_actions.left,
-                        right=action_state.right or held_actions.right,
-                        jump=action_state.jump or held_actions.jump,
-                        sneak=action_state.sneak or held_actions.sneak,
-                        sprint=action_state.sprint or held_actions.sprint,
-                        inventory=action_state.inventory or held_actions.inventory,
-                        drop=action_state.drop or held_actions.drop,
-                        swap=action_state.swap or held_actions.swap,
-                        use=action_state.use or held_actions.use,
-                        attack=action_state.attack or held_actions.attack,
-                        pick_item=action_state.pick_item or held_actions.pick_item,
-                        hotbar1=action_state.hotbar1 or held_actions.hotbar1,
-                        hotbar2=action_state.hotbar2 or held_actions.hotbar2,
-                        hotbar3=action_state.hotbar3 or held_actions.hotbar3,
-                        hotbar4=action_state.hotbar4 or held_actions.hotbar4,
-                        hotbar5=action_state.hotbar5 or held_actions.hotbar5,
-                        hotbar6=action_state.hotbar6 or held_actions.hotbar6,
-                        hotbar7=action_state.hotbar7 or held_actions.hotbar7,
-                        hotbar8=action_state.hotbar8 or held_actions.hotbar8,
-                    )
-                
                 # Send the action
-                action = Action(final_action_state, exit_menu, mouse_x, mouse_y)
-                success = action_client.send_action(action)
-                
-                if success and not hold_action:
-                    # Auto-release after short delay for one-time actions
-                    time.sleep(0.1)
-                    release_action = Action(held_actions)  # Keep only held actions
-                    action_client.send_action(release_action)
+                action = Action(action_state, exit_menu, mouse_x, mouse_y)
+                action_client.send_action(action)
                 
             except EOFError:
                 print("\nEOF received, exiting...")
@@ -565,9 +475,6 @@ def run_interactive_mode():
     except KeyboardInterrupt:
         print("\nInterrupted by user")
     finally:
-        # Release all actions before disconnecting
-        if action_client.connected:
-            action_client.send_action(Action(ActionState()))
         action_client.disconnect()
         observation_client.disconnect()
 
@@ -610,11 +517,6 @@ def run_automated_test():
             print(f"  {i+1:2d}. {name}")
             action = Action(action_state, exit_menu, mouse_x, mouse_y)
             action_client.send_action(action)
-            time.sleep(0.5)
-            
-            # Send release
-            release_action = Action(ActionState())
-            action_client.send_action(release_action)
             time.sleep(0.5)
         
         print("✓ Automated test completed successfully")
