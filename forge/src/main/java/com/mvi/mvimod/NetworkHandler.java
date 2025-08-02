@@ -23,21 +23,23 @@ import org.slf4j.Logger;
 
 public class NetworkHandler implements Runnable {
   private static final Logger LOGGER = LogUtils.getLogger();
-  private static final String SEND_SOCKET_PATH = "/tmp/mvi_send.sock";
-  private static final String RECEIVE_SOCKET_PATH = "/tmp/mvi_receive.sock";
+  private static final String OBSERVATION_SOCKET_PATH = "/tmp/mvi_observation.sock";
+  private static final String ACTION_SOCKET_PATH = "/tmp/mvi_action.sock";
   private static final ExecutorService senderExecutor = Executors.newCachedThreadPool();
   private static final ExecutorService receiverExecutor = Executors.newCachedThreadPool();
-  private Thread sendThread;
-  private Thread receiveThread;
-  private ServerSocketChannel sendSocketChannel;
-  private ServerSocketChannel receiveSocketChannel;
+  private Thread observationThread;
+  private Thread actionThread;
+  private ServerSocketChannel observationSocketChannel;
+  private ServerSocketChannel actionSocketChannel;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
   // Async observation sending
+  // TODO: Move this AtomicReference to DataBridge
   private final AtomicReference<Observation> latestObservation = new AtomicReference<Observation>();
   private final Semaphore frameAvailable = new Semaphore(0);
 
   // Observation data container
+  // TODO: Move to custom class that has serialization methods
   private static class Observation {
     final byte[] frameBuffer;
     final int reward;
@@ -53,37 +55,37 @@ public class NetworkHandler implements Runnable {
   @Override
   public void run() {
     try {
-      Files.deleteIfExists(Path.of(SEND_SOCKET_PATH));
-      Files.deleteIfExists(Path.of(RECEIVE_SOCKET_PATH));
+      Files.deleteIfExists(Path.of(OBSERVATION_SOCKET_PATH));
+      Files.deleteIfExists(Path.of(ACTION_SOCKET_PATH));
 
-      sendSocketChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
-      sendSocketChannel.bind(UnixDomainSocketAddress.of(SEND_SOCKET_PATH));
-      sendSocketChannel.configureBlocking(true);
+      observationSocketChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+      observationSocketChannel.bind(UnixDomainSocketAddress.of(OBSERVATION_SOCKET_PATH));
+      observationSocketChannel.configureBlocking(true);
 
-      receiveSocketChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
-      receiveSocketChannel.bind(UnixDomainSocketAddress.of(RECEIVE_SOCKET_PATH));
-      receiveSocketChannel.configureBlocking(true);
+      actionSocketChannel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+      actionSocketChannel.bind(UnixDomainSocketAddress.of(ACTION_SOCKET_PATH));
+      actionSocketChannel.configureBlocking(true);
 
-      LOGGER.info("Socket files created: {} and {}", SEND_SOCKET_PATH, RECEIVE_SOCKET_PATH);
+      LOGGER.info("Socket files created: {} and {}", OBSERVATION_SOCKET_PATH, ACTION_SOCKET_PATH);
 
       // Verify socket files were actually created
-      if (!Files.exists(Path.of(SEND_SOCKET_PATH))) {
-        throw new IOException("Failed to create send socket file: " + SEND_SOCKET_PATH);
+      if (!Files.exists(Path.of(OBSERVATION_SOCKET_PATH))) {
+        throw new IOException("Failed to create observation socket file: " + OBSERVATION_SOCKET_PATH);
       }
-      if (!Files.exists(Path.of(RECEIVE_SOCKET_PATH))) {
-        throw new IOException("Failed to create receive socket file: " + RECEIVE_SOCKET_PATH);
+      if (!Files.exists(Path.of(ACTION_SOCKET_PATH))) {
+        throw new IOException("Failed to create action socket file: " + ACTION_SOCKET_PATH);
       }
 
       LOGGER.info(
-          "Socket files verified - Send: {}, Receive: {}",
-          Files.exists(Path.of(SEND_SOCKET_PATH)),
-          Files.exists(Path.of(RECEIVE_SOCKET_PATH)));
+          "Socket files verified - Observation: {}, Action: {}",
+          Files.exists(Path.of(OBSERVATION_SOCKET_PATH)),
+          Files.exists(Path.of(ACTION_SOCKET_PATH)));
 
-      sendThread = new Thread(this::acceptSendClients, "SendClients");
-      receiveThread = new Thread(this::acceptReceiveClients, "ReceiveClients");
+      observationThread = new Thread(this::acceptObservationClients, "ObservationClients");
+      actionThread = new Thread(this::acceptActionClients, "ActionClients");
 
-      sendThread.start();
-      receiveThread.start();
+      observationThread.start();
+      actionThread.start();
 
       // Keep main thread alive while server is running
       while (this.running.get() && !Thread.currentThread().isInterrupted()) {
@@ -102,47 +104,47 @@ public class NetworkHandler implements Runnable {
     }
   }
 
-  private void acceptSendClients() {
-    LOGGER.info("Send clients acceptor thread started");
+  private void acceptObservationClients() {
+    LOGGER.info("Observation clients acceptor thread started");
     while (this.running.get() && !Thread.currentThread().isInterrupted()) {
       try {
-        SocketChannel clientSocket = sendSocketChannel.accept();
-        LOGGER.info("Send client connected: " + clientSocket.getRemoteAddress());
+        SocketChannel clientSocket = observationSocketChannel.accept();
+        LOGGER.info("Observation client connected: " + clientSocket.getRemoteAddress());
         // 1MB send buffer which can fit small frames
         clientSocket.setOption(StandardSocketOptions.SO_SNDBUF, 1024 * 1024);
-        handleSendClient(clientSocket);
+        handleObservationClient(clientSocket);
       } catch (IOException e) {
         if (this.running.get()) {
-          LOGGER.error("Error accepting send client", e);
+          LOGGER.error("Error accepting observation client", e);
         } else {
-          LOGGER.info("Send socket channel closed, stopping accept loop");
+          LOGGER.info("Observation socket channel closed, stopping accept loop");
           break;
         }
       }
     }
-    LOGGER.info("Send clients acceptor thread stopped");
+    LOGGER.info("Observation clients acceptor thread stopped");
   }
 
-  private void acceptReceiveClients() {
+  private void acceptActionClients() {
     LOGGER.info("Receive clients acceptor thread started");
     while (this.running.get() && !Thread.currentThread().isInterrupted()) {
       try {
-        SocketChannel clientSocket = receiveSocketChannel.accept();
-        LOGGER.info("Receive client connected: " + clientSocket.getRemoteAddress());
-        handleReceiveClient(clientSocket);
+        SocketChannel clientSocket = actionSocketChannel.accept();
+        LOGGER.info("Action client connected: " + clientSocket.getRemoteAddress());
+        handleActionClient(clientSocket);
       } catch (IOException e) {
         if (this.running.get()) {
-          LOGGER.error("Error accepting receive client", e);
+          LOGGER.error("Error accepting action client", e);
         } else {
-          LOGGER.info("Receive socket channel closed, stopping accept loop");
+          LOGGER.info("Action socket channel closed, stopping accept loop");
           break;
         }
       }
     }
-    LOGGER.info("Receive clients acceptor thread stopped");
+    LOGGER.info("Action clients acceptor thread stopped");
   }
 
-  private void handleReceiveClient(SocketChannel clientSocket) {
+  private void handleActionClient(SocketChannel clientSocket) {
     receiverExecutor.submit(
         () -> {
           try {
@@ -184,7 +186,7 @@ public class NetworkHandler implements Runnable {
         });
   }
 
-  private void handleSendClient(SocketChannel clientSocket) {
+  private void handleObservationClient(SocketChannel clientSocket) {
     senderExecutor.submit(
         () -> {
           try {
@@ -234,7 +236,7 @@ public class NetworkHandler implements Runnable {
     }
   }
 
-  private void processCommand(ByteBuffer actionBuffer) {
+  private void processAction(ByteBuffer actionBuffer) {
     final Action action = Action.fromBytes(actionBuffer.array());
     DataBridge.getInstance().setLatestAction(action);
   }
@@ -246,19 +248,19 @@ public class NetworkHandler implements Runnable {
     // Release all pressed keys on cleanup
     ClientEventHandler.releaseAllKeys();
     // Wait for threads to finish
-    if (this.sendThread != null) {
+    if (this.observationThread != null) {
       try {
-        this.sendThread.interrupt();
-        this.sendThread.join(5000); // Wait up to 5 seconds
+        this.observationThread.interrupt();
+        this.observationThread.join(5000); // Wait up to 5 seconds
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
     }
 
-    if (this.receiveThread != null) {
+    if (this.actionThread != null) {
       try {
-        this.receiveThread.interrupt();
-        this.receiveThread.join(5000); // Wait up to 5 seconds
+        this.actionThread.interrupt();
+        this.actionThread.join(5000); // Wait up to 5 seconds
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
@@ -269,19 +271,19 @@ public class NetworkHandler implements Runnable {
     receiverExecutor.shutdown();
 
     try {
-      if (this.sendSocketChannel != null) {
-        this.sendSocketChannel.close();
+      if (this.observationSocketChannel != null) {
+        this.observationSocketChannel.close();
       }
-      if (this.receiveSocketChannel != null) {
-        this.receiveSocketChannel.close();
+      if (this.actionSocketChannel != null) {
+        this.actionSocketChannel.close();
       }
     } catch (IOException e) {
       LOGGER.error("Cleanup error: " + e.getMessage());
     }
 
     try {
-      Files.deleteIfExists(Path.of(SEND_SOCKET_PATH));
-      Files.deleteIfExists(Path.of(RECEIVE_SOCKET_PATH));
+      Files.deleteIfExists(Path.of(OBSERVATION_SOCKET_PATH));
+      Files.deleteIfExists(Path.of(ACTION_SOCKET_PATH));
     } catch (IOException e) {
       LOGGER.error("Cleanup error: " + e.getMessage());
     }
