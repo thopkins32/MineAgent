@@ -146,14 +146,14 @@ public class NetworkHandler implements Runnable {
         () -> {
           try {
             clientSocket.configureBlocking(true);
-            ByteBuffer actionBuffer = ByteBuffer.allocate(11); // Action is exactly 11 bytes
+            ByteBuffer actionBuffer = ByteBuffer.allocate(12); // Action is exactly 12 bytes
             
             while (this.running.get()) {
               actionBuffer.clear();
               
               // Read exactly 11 bytes for one Action
               int totalBytesRead = 0;
-              while (totalBytesRead < 11) {
+              while (totalBytesRead < 12) {
                 int bytesRead = clientSocket.read(actionBuffer);
                 if (bytesRead == -1) {
                   // Client disconnected
@@ -236,6 +236,7 @@ public class NetworkHandler implements Runnable {
   private void processAction(ByteBuffer actionBuffer) {
     final Action action = Action.fromBytes(actionBuffer.array());
     DataBridge.getInstance().setLatestAction(action);
+    LOGGER.info("Action received: {}", action);
   }
 
   private void cleanup() {

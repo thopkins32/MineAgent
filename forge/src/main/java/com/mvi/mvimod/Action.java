@@ -1,6 +1,8 @@
 package com.mvi.mvimod;
 
 import java.nio.ByteBuffer;
+import com.mojang.logging.LogUtils;
+import org.slf4j.Logger;
 
 /*
  * This class represents the complete action schema for communication between the client and server.
@@ -20,6 +22,8 @@ public record Action(
     float mouseControlX,
     float mouseControlY
 ) {
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     public boolean up() { return actionState.up(); }
     public boolean down() { return actionState.down(); }
     public boolean left() { return actionState.left(); }
@@ -51,7 +55,7 @@ public record Action(
 
         // Add exit menu flag with padding
         int menuByte = 0;
-        menuByte |= (exitMenu ? 1 : 0);
+        menuByte |= (exitMenu ? 1 << 7 : 0);
         buffer.put((byte) menuByte);
 
         // Add mouse controls
@@ -62,6 +66,7 @@ public record Action(
     }
 
     public static Action fromBytes(byte[] bytes) {
+        LOGGER.info("Action fromBytes: {}", bytes);
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
         // Extract persistent action bytes

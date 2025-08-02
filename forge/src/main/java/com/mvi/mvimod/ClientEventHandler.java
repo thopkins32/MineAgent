@@ -56,16 +56,19 @@ public class ClientEventHandler {
 
   @SubscribeEvent
   public static void onClientTick(TickEvent.ClientTickEvent event) {
-    final Action action = dataBridge.getLatestAction();
-    if (action != null) {
-      processAction(action);
-    }
+    Minecraft mc = Minecraft.getInstance();
+    if (mc.level != null && mc.player != null) {
+      final Action action = dataBridge.getLatestAction();
+      if (action != null) {
+        processAction(action);
+      }
 
-    if (event.phase == TickEvent.Phase.END) {
-      // int reward = packageReward();
-      ActionState currentActionState = ActionHandler.getActionState(Minecraft.getInstance());
-      byte[] frame = captureFrame();
-      dataBridge.sendObservation(new Observation(0.0, currentActionState, frame));
+      if (event.phase == TickEvent.Phase.END) {
+        // int reward = packageReward();
+        final ActionState currentActionState = ActionHandler.getActionState(Minecraft.getInstance());
+        final byte[] frame = captureFrame();
+        dataBridge.sendObservation(new Observation(0.0, currentActionState, frame));
+      }
     }
   }
 
@@ -85,10 +88,7 @@ public class ClientEventHandler {
   
   private static byte[] captureFrame() {
     Minecraft mc = Minecraft.getInstance();
-    if (mc.level != null && mc.player != null) {
-      return captureScreenshot(mc.getWindow());
-    }
-    return null;
+    return captureScreenshot(mc.getWindow());
   }
 
   private static byte[] captureScreenshot(Window window) {

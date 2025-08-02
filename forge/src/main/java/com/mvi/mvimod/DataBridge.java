@@ -28,7 +28,7 @@ public class DataBridge {
 
   public void sendObservation(Observation obs) {
     if (networkHandler != null) {
-      LOGGER.info("DataBridge sending frame data (size: {} bytes)", obs.frame().length);
+      // LOGGER.info("DataBridge sending frame data (size: {} bytes)", obs.frame().length);
       networkHandler.setLatest(obs.frame(), obs.reward());
     } else {
       LOGGER.warn("Cannot send frame - NetworkHandler is null");
@@ -40,6 +40,10 @@ public class DataBridge {
   }
 
   public Action getLatestAction() {
-    return latestAction.get();
+    Action action = latestAction.getAndSet(null);
+    if (action != null) {
+      LOGGER.info("DataBridge getting latest action: {}", action);
+    }
+    return action;
   }
 }
