@@ -1,10 +1,7 @@
 package com.mvi.mvimod;
 
 import com.mojang.logging.LogUtils;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.StandardProtocolFamily;
 import java.net.StandardSocketOptions;
 import java.net.UnixDomainSocketAddress;
@@ -25,8 +22,8 @@ public class NetworkHandler implements Runnable {
   private static final Logger LOGGER = LogUtils.getLogger();
   private static final String OBSERVATION_SOCKET_PATH = "/tmp/mvi_observation.sock";
   private static final String ACTION_SOCKET_PATH = "/tmp/mvi_action.sock";
-  private static final ExecutorService senderExecutor = Executors.newCachedThreadPool();
-  private static final ExecutorService receiverExecutor = Executors.newCachedThreadPool();
+  private static final ExecutorService observationExecutor = Executors.newCachedThreadPool();
+  private static final ExecutorService actionExecutor = Executors.newCachedThreadPool();
   private Thread observationThread;
   private Thread actionThread;
   private ServerSocketChannel observationSocketChannel;
@@ -42,10 +39,10 @@ public class NetworkHandler implements Runnable {
   // TODO: Move to custom class that has serialization methods
   private static class Observation {
     final byte[] frameBuffer;
-    final int reward;
+    final double reward;
     final long timestamp;
 
-    Observation(byte[] frameBuffer, int reward) {
+    Observation(byte[] frameBuffer, double reward) {
       this.frameBuffer = frameBuffer;
       this.reward = reward;
       this.timestamp = System.currentTimeMillis();
@@ -126,7 +123,7 @@ public class NetworkHandler implements Runnable {
   }
 
   private void acceptActionClients() {
-    LOGGER.info("Receive clients acceptor thread started");
+    LOGGER.info("Action clients acceptor thread started");
     while (this.running.get() && !Thread.currentThread().isInterrupted()) {
       try {
         SocketChannel clientSocket = actionSocketChannel.accept();
@@ -145,7 +142,7 @@ public class NetworkHandler implements Runnable {
   }
 
   private void handleActionClient(SocketChannel clientSocket) {
-    receiverExecutor.submit(
+    actionExecutor.submit(
         () -> {
           try {
             clientSocket.configureBlocking(true);
@@ -167,7 +164,7 @@ public class NetworkHandler implements Runnable {
               }
 
               // Process each action asynchronously to avoid blocking
-              CompletableFuture.runAsync(() -> processCommand(actionBuffer), receiverExecutor)
+              CompletableFuture.runAsync(() -> processAction(actionBuffer), actionExecutor)
                   .exceptionally(
                       throwable -> {
                         LOGGER.error("Error processing action: " + actionBuffer, throwable);
@@ -187,7 +184,7 @@ public class NetworkHandler implements Runnable {
   }
 
   private void handleObservationClient(SocketChannel clientSocket) {
-    senderExecutor.submit(
+    observationExecutor.submit(
         () -> {
           try {
             while (this.running.get()) {
@@ -212,7 +209,7 @@ public class NetworkHandler implements Runnable {
         });
   }
 
-  public void setLatest(byte[] frameBuffer, int reward) {
+  public void setLatest(byte[] frameBuffer, double reward) {
     Observation observation = new Observation(frameBuffer, reward);
     latestObservation.set(observation);
     frameAvailable.drainPermits();
@@ -223,7 +220,7 @@ public class NetworkHandler implements Runnable {
     try {
       int totalSize = 8 + observation.frameBuffer.length;
       ByteBuffer buffer = ByteBuffer.allocate(totalSize);
-      buffer.putInt(observation.reward);
+      buffer.putDouble(observation.reward);
       buffer.putInt(observation.frameBuffer.length);
       buffer.put(observation.frameBuffer);
       buffer.flip();
@@ -267,8 +264,8 @@ public class NetworkHandler implements Runnable {
     }
 
     // Shutdown executors
-    senderExecutor.shutdown();
-    receiverExecutor.shutdown();
+    observationExecutor.shutdown();
+    actionExecutor.shutdown();
 
     try {
       if (this.observationSocketChannel != null) {
