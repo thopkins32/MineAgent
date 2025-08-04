@@ -36,39 +36,36 @@ public class ClientEventHandler {
     ActionHandler.pressKeyMapping(mc.options.keyJump, action.jump());
     ActionHandler.pressKeyMapping(mc.options.keyShift, action.sneak());
     ActionHandler.pressKeyMapping(mc.options.keySprint, action.sprint());
-    ActionHandler.pressKeyMapping(mc.options.keyInventory, action.inventory());
-    ActionHandler.pressKeyMapping(mc.options.keyDrop, action.drop());
-    ActionHandler.pressKeyMapping(mc.options.keySwapOffhand, action.swap());
-    ActionHandler.pressKeyMapping(mc.options.keyUse, action.use());
-    ActionHandler.pressKeyMapping(mc.options.keyAttack, action.attack());
-    ActionHandler.pressKeyMapping(mc.options.keyPickItem, action.pick_item());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[0], action.hotbar1());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[1], action.hotbar2());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[2], action.hotbar3());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[3], action.hotbar4());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[4], action.hotbar5());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[5], action.hotbar6());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[6], action.hotbar7());
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[7], action.hotbar8());
+    ActionHandler.clickKeyMapping(mc.options.keyInventory, action.inventory());
+    ActionHandler.clickKeyMapping(mc.options.keyDrop, action.drop());
+    ActionHandler.clickKeyMapping(mc.options.keySwapOffhand, action.swap());
+    ActionHandler.clickKeyMapping(mc.options.keyUse, action.use());
+    ActionHandler.clickKeyMapping(mc.options.keyAttack, action.attack());
+    ActionHandler.clickKeyMapping(mc.options.keyPickItem, action.pick_item());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[0], action.hotbar1());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[1], action.hotbar2());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[2], action.hotbar3());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[3], action.hotbar4());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[4], action.hotbar5());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[5], action.hotbar6());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[6], action.hotbar7());
+    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[7], action.hotbar8());
     ActionHandler.exitMenu(mc, action.exitMenu());
-    ActionHandler.turnPlayer(mc, action.mouseControlX(), action.mouseControlY());
+    ActionHandler.handleMouseControl(mc, action.mouseControlX(), action.mouseControlY());
   }
 
   @SubscribeEvent
   public static void onClientTick(TickEvent.ClientTickEvent event) {
     Minecraft mc = Minecraft.getInstance();
-    if (mc.level != null && mc.player != null) {
+    if (mc.level != null && mc.player != null && event.phase == TickEvent.Phase.END) {
       final Action action = dataBridge.getLatestAction();
       if (action != null) {
         processAction(action);
       }
-
-      if (event.phase == TickEvent.Phase.END) {
-        // int reward = packageReward();
-        final ActionState currentActionState = ActionHandler.getActionState(Minecraft.getInstance());
-        final byte[] frame = captureFrame();
-        dataBridge.sendObservation(new Observation(0.0, currentActionState, frame));
-      }
+      // int reward = packageReward();
+      final ActionState currentActionState = ActionHandler.getActionState(Minecraft.getInstance());
+      final byte[] frame = captureFrame();
+      dataBridge.sendObservation(new Observation(0.0, currentActionState, frame));
     }
   }
 
