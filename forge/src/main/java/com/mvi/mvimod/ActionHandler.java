@@ -3,13 +3,17 @@ package com.mvi.mvimod;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import org.slf4j.Logger;
 import org.lwjgl.glfw.GLFW;
 
 public class ActionHandler {
   private static final Logger LOGGER = LogUtils.getLogger();
+  private static boolean rightMouseDown = false;
+  private static boolean leftMouseDown = false;
+  private static boolean virtualMouseInitialized = false;
+  private static double virtualMouseX = 0.0;
+  private static double virtualMouseY = 0.0;
+  private static boolean suppressSystemMouseInput = true;
 
   public static ActionState getActionState(Minecraft mc) {
     final ActionState actionState = new ActionState(
@@ -33,7 +37,9 @@ public class ActionHandler {
       mc.options.keyHotbarSlots[4].isDown(),
       mc.options.keyHotbarSlots[5].isDown(),
       mc.options.keyHotbarSlots[6].isDown(),
-      mc.options.keyHotbarSlots[7].isDown()
+      mc.options.keyHotbarSlots[7].isDown(),
+      rightMouseDown,
+      leftMouseDown
     );
     return actionState;
   }
@@ -66,72 +72,97 @@ public class ActionHandler {
     }
   }
 
-  /**
-   * Enhanced mouse control that handles both world and GUI interaction
-   */
   public static void handleMouseControl(Minecraft mc, float deltaX, float deltaY) {
     if (isScreenOpen(mc)) {
-      // Handle GUI mouse movement
       moveMouseInGUI(mc, deltaX, deltaY);
     } else {
-      // Handle world mouse movement (player turning)
+      // Re-enable OS cursor when not in GUI
+      if (suppressSystemMouseInput) {
+        long windowHandle = mc.getWindow().getWindow();
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+      }
       turnPlayer(mc, deltaX, deltaY);
     }
   }
 
-  /**
-   * Check if any screen is currently open that the agent can observe
-   */
   public static boolean isScreenOpen(Minecraft mc) {
     return mc.screen != null;
   }
 
-  /**
-   * Move mouse cursor within GUI screens
-   */
   public static void moveMouseInGUI(Minecraft mc, float deltaX, float deltaY) {
     if (mc.screen != null) {
-      long windowHandle = mc.getWindow().getWindow();
-      
-      // Get current mouse position
-      double[] currentX = new double[1];
-      double[] currentY = new double[1];
-      GLFW.glfwGetCursorPos(windowHandle, currentX, currentY);
-      
-      // Calculate new position
-      double newX = currentX[0] + deltaX;
-      double newY = currentY[0] + deltaY;
-      
-      // Clamp to screen bounds
-      int screenWidth = mc.getWindow().getScreenWidth();
-      int screenHeight = mc.getWindow().getScreenHeight();
-      newX = Math.max(0, Math.min(screenWidth - 1, newX));
-      newY = Math.max(0, Math.min(screenHeight - 1, newY));
-      
-      // Set new mouse position
-      GLFW.glfwSetCursorPos(windowHandle, newX, newY);
-      
-      LOGGER.debug("GUI Mouse moved by ({}, {}) to ({}, {})", deltaX, deltaY, newX, newY);
+      // Detach OS mouse by disabling the cursor when suppressing system input
+      suppressSystemMouseInput = Config.SUPPRESS_SYSTEM_MOUSE_INPUT.get();
+      if (suppressSystemMouseInput) {
+        long windowHandle = mc.getWindow().getWindow();
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+      }
+      // Initialize virtual mouse at window center if needed
+      if (!virtualMouseInitialized) {
+        virtualMouseX = mc.getWindow().getWidth() / 2.0;
+        virtualMouseY = mc.getWindow().getHeight() / 2.0;
+        virtualMouseInitialized = true;
+      }
+
+      // Update internal virtual mouse position
+      virtualMouseX += deltaX;
+      virtualMouseY += deltaY;
+
+      // Clamp to window bounds
+      double maxX = mc.getWindow().getWidth() - 1;
+      double maxY = mc.getWindow().getHeight() - 1;
+      if (virtualMouseX < 0) virtualMouseX = 0;
+      if (virtualMouseY < 0) virtualMouseY = 0;
+      if (virtualMouseX > maxX) virtualMouseX = maxX;
+      if (virtualMouseY > maxY) virtualMouseY = maxY;
+
+      // Notify current screen about mouse movement without moving OS cursor
+      mc.screen.mouseMoved(virtualMouseX, virtualMouseY);
+      LOGGER.debug("GUI Virtual mouse moved by ({}, {}) to ({}, {})", deltaX, deltaY, virtualMouseX, virtualMouseY);
     }
   }
 
-  public static void clickMouse(Minecraft mc, boolean leftClick) {
-    if (mc.screen != null) {
-      long windowHandle = mc.getWindow().getWindow();
-      
-      // Get current mouse position
-      double[] mouseX = new double[1];
-      double[] mouseY = new double[1];
-      GLFW.glfwGetCursorPos(windowHandle, mouseX, mouseY);
-      
-      int button = leftClick ? GLFW.GLFW_MOUSE_BUTTON_LEFT : GLFW.GLFW_MOUSE_BUTTON_RIGHT;
-      
-      // Simulate mouse press and release
-      mc.screen.mouseClicked(mouseX[0], mouseY[0], button);
-      mc.screen.mouseReleased(mouseX[0], mouseY[0], button);
-      
-      LOGGER.debug("GUI Mouse {} clicked at ({}, {})", 
-        leftClick ? "left" : "right", mouseX[0], mouseY[0]);
+  public static void rightMouseControl(Minecraft mc, boolean down) {
+    if (mc.screen != null && rightMouseDown != down) {
+      suppressSystemMouseInput = Config.SUPPRESS_SYSTEM_MOUSE_INPUT.get();
+      if (suppressSystemMouseInput) {
+        long windowHandle = mc.getWindow().getWindow();
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+      }
+
+      int button = GLFW.GLFW_MOUSE_BUTTON_RIGHT;
+
+      if (down) {
+        mc.screen.mouseClicked(virtualMouseX, virtualMouseY, button);
+        rightMouseDown = true;
+      } else {
+        mc.screen.mouseReleased(virtualMouseX, virtualMouseY, button);
+        rightMouseDown = false;
+      }
+
+      LOGGER.debug("GUI Virtual right click at ({}, {})", virtualMouseX, virtualMouseY);
+    }
+  }
+
+  public static void leftMouseControl(Minecraft mc, boolean down) {
+    if (mc.screen != null && leftMouseDown != down) {
+      suppressSystemMouseInput = Config.SUPPRESS_SYSTEM_MOUSE_INPUT.get();
+      if (suppressSystemMouseInput) {
+        long windowHandle = mc.getWindow().getWindow();
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+      }
+
+      int button = GLFW.GLFW_MOUSE_BUTTON_LEFT;
+
+      if (down) {
+        mc.screen.mouseClicked(virtualMouseX, virtualMouseY, button);
+        leftMouseDown = true;
+      } else {
+        mc.screen.mouseReleased(virtualMouseX, virtualMouseY, button);
+        leftMouseDown = false;
+      }
+
+      LOGGER.debug("GUI Virtual left click at ({}, {})", virtualMouseX, virtualMouseY);
     }
   }
 }

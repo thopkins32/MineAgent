@@ -23,7 +23,9 @@ public record ActionState(
     boolean hotbar5,
     boolean hotbar6,
     boolean hotbar7,
-    boolean hotbar8
+    boolean hotbar8,
+    boolean rightMouseDown,
+    boolean leftMouseDown
 ) {
     public byte[] toBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(3);
@@ -74,7 +76,11 @@ public record ActionState(
         thirdByte |= (hotbar7 ? 1 : 0);
         thirdByte <<= 1;
         thirdByte |= (hotbar8 ? 1 : 0);
-        // Leave 3 bits unused for padding
+        thirdByte <<= 1;
+        thirdByte |= (rightMouseDown ? 1 : 0);
+        thirdByte <<= 1;
+        thirdByte |= (leftMouseDown ? 1 : 0);
+        // Leave 1 bit unused for padding
         buffer.put((byte) thirdByte);
 
         return buffer.array();
@@ -108,7 +114,9 @@ public record ActionState(
             ((thirdByte >> 6) & 1) == 1,  // hotbar5
             ((thirdByte >> 5) & 1) == 1,  // hotbar6
             ((thirdByte >> 4) & 1) == 1,  // hotbar7
-            ((thirdByte >> 3) & 1) == 1   // hotbar8
+            ((thirdByte >> 3) & 1) == 1,  // hotbar8
+            ((thirdByte >> 2) & 1) == 1,  // rightMouseDown
+            ((thirdByte >> 1) & 1) == 1   // leftMouseDown
         );
     }
 }

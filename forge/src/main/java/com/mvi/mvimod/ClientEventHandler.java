@@ -52,6 +52,8 @@ public class ClientEventHandler {
     ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[7], action.hotbar8());
     ActionHandler.exitMenu(mc, action.exitMenu());
     ActionHandler.handleMouseControl(mc, action.mouseControlX(), action.mouseControlY());
+    ActionHandler.rightMouseControl(mc, action.rightMouseDown());
+    ActionHandler.leftMouseControl(mc, action.leftMouseDown());
   }
 
   @SubscribeEvent

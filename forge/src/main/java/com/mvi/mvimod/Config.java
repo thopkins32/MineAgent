@@ -17,6 +17,7 @@ public class Config {
   public static final ForgeConfigSpec.ConfigValue<Double> JPEG_QUALITY;
   public static final ForgeConfigSpec.ConfigValue<Integer> MAX_FRAME_SIZE;
   public static final ForgeConfigSpec.ConfigValue<Integer> CHANGE_THRESHOLD;
+  public static final ForgeConfigSpec.ConfigValue<Boolean> SUPPRESS_SYSTEM_MOUSE_INPUT;
 
   // Built Configuration Specification
   public static final ForgeConfigSpec SPEC;
@@ -70,6 +71,17 @@ public class Config {
         BUILDER
             .comment("Pixel change threshold for delta encoding (sum of RGB differences)")
             .defineInRange("change_threshold", 10, 1, 255);
+
+    BUILDER.pop();
+
+    // Input Configuration
+    BUILDER.comment("Input Configuration");
+    BUILDER.push("input");
+
+    SUPPRESS_SYSTEM_MOUSE_INPUT =
+        BUILDER
+            .comment("If true, disables OS cursor while a GUI is open and uses a virtual mouse for agent control")
+            .define("suppress_system_mouse_input", true);
 
     BUILDER.pop();
 

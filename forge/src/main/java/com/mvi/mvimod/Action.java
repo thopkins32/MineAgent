@@ -45,6 +45,8 @@ public record Action(
     public boolean hotbar6() { return actionState.hotbar6(); }
     public boolean hotbar7() { return actionState.hotbar7(); }
     public boolean hotbar8() { return actionState.hotbar8(); }
+    public boolean rightMouseDown() { return actionState.rightMouseDown(); }
+    public boolean leftMouseDown() { return actionState.leftMouseDown(); }
 
     public byte[] toBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(3 + 1 + 4 + 4);
@@ -92,13 +94,15 @@ public record Action(
         boolean drop, boolean swap, boolean use, boolean attack, boolean pick_item,
         boolean hotbar1, boolean hotbar2, boolean hotbar3, boolean hotbar4,
         boolean hotbar5, boolean hotbar6, boolean hotbar7, boolean hotbar8,
+        boolean rightMouseDown, boolean leftMouseDown,
         boolean exitMenu, float mouseControlX, float mouseControlY
     ) {
         this(
             new ActionState(
                 up, down, left, right, jump, sneak, sprint, inventory,
                 drop, swap, use, attack, pick_item,
-                hotbar1, hotbar2, hotbar3, hotbar4, hotbar5, hotbar6, hotbar7, hotbar8
+                hotbar1, hotbar2, hotbar3, hotbar4, hotbar5, hotbar6, hotbar7, hotbar8,
+                rightMouseDown, leftMouseDown
             ),
             exitMenu, mouseControlX, mouseControlY
         );

@@ -40,6 +40,8 @@ class ActionState:
     hotbar6: bool = False
     hotbar7: bool = False
     hotbar8: bool = False
+    right_mouse_down: bool = False
+    left_mouse_down: bool = False
 
     def to_bytes(self) -> bytes:
         """Convert action state to 3-byte packed format"""
@@ -72,6 +74,8 @@ class ActionState:
         third_byte |= (self.hotbar6 << 5)
         third_byte |= (self.hotbar7 << 4)
         third_byte |= (self.hotbar8 << 3)
+        third_byte |= (self.right_mouse_down << 2)
+        third_byte |= (self.left_mouse_down << 1)
         # Bits 0-2 are padding
 
         return bytes([first_byte, second_byte, third_byte])
@@ -265,6 +269,9 @@ def show_help():
     print("  look <y>        - Look vertically by y amount")
     print("  mleft, mright   - Quick turn left/right")
     print("  mup, mdown      - Quick look up/down")
+    print("  lclick, rclick  - Quick left/right mouse click")
+    print("  mouseleft <down|up>   - Hold or release left mouse (GUI)")
+    print("  mouseright <down|up>  - Hold or release right mouse (GUI)")
     print()
     print("SPECIAL COMMANDS:")
     print("  esc, exit       - Exit menu/GUI")
@@ -328,6 +335,23 @@ def parse_command(command_line: str) -> tuple[ActionState, bool, float, float]:
             mouse_y = float(parts[1])
         except ValueError:
             print("✗ Invalid look amount. Use: look <y>")
+        return action_state, exit_menu, mouse_x, mouse_y
+
+    # Mouse button control (GUI) - explicit down/up
+    if main_command in ["mouseleft", "mouseright"]:
+        state = None
+        if len(parts) >= 2:
+            if parts[1] in ["down", "press", "on"]:
+                state = True
+            elif parts[1] in ["up", "release", "off"]:
+                state = False
+        # Default to down if not specified
+        if state is None:
+            state = True
+        if main_command == "mouseleft":
+            action_state.left_mouse_down = state
+        else:
+            action_state.right_mouse_down = state
         return action_state, exit_menu, mouse_x, mouse_y
     
     # Handle regular single actions
@@ -453,6 +477,20 @@ def run_interactive_mode():
                         action_client.send_action(action)
                         time.sleep(0.3)
                     print("✓ Test sequence completed")
+                    continue
+
+                # Quick mouse click helpers
+                if command_line.lower() in ["lclick", "rclick"]:
+                    is_left = command_line.lower() == "lclick"
+                    # Press
+                    press_state = ActionState(left_mouse_down=True) if is_left else ActionState(right_mouse_down=True)
+                    action = Action(press_state, False, 0.0, 0.0)
+                    action_client.send_action(action)
+                    time.sleep(0.05)
+                    # Release
+                    release_state = ActionState(left_mouse_down=False, right_mouse_down=False)
+                    action = Action(release_state, False, 0.0, 0.0)
+                    action_client.send_action(action)
                     continue
                 
                 # Parse the command
