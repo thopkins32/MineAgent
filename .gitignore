@@ -199,3 +199,6 @@ run
 # Files from Forge MDK
 forge*changelog.txt
 forge/run-data/
+
+# Cursor
+.cursor/
