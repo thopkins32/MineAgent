@@ -1,4 +1,4 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.logging.LogUtils;
@@ -19,12 +19,12 @@ public class ClientEventHandler {
   
   @SubscribeEvent
   public static void onServerStarting(ServerStartingEvent event) {
-    LOGGER.info("MVI Mod Server Starting - Network handler is managed on client side");
+    LOGGER.info("MineAgent Mod Server Starting - Network handler is managed on client side");
   }
 
   @SubscribeEvent
   public static void onServerStopping(ServerStoppingEvent event) {
-    LOGGER.info("MVI Mod Server Stopping");
+    LOGGER.info("MineAgent Mod Server Stopping");
   }
 
   private static void processAction(Action action) {

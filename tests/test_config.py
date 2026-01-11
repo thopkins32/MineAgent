@@ -4,8 +4,8 @@ from copy import deepcopy
 import pytest
 import yaml
 
-from mvi.agent.agent import AgentV1
-from mvi.config import (
+from mineagent.agent.agent import AgentV1
+from mineagent.config import (
     parse_config,
     update_config,
     PPOConfig,

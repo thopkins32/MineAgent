@@ -1,7 +1,7 @@
 import torch
 from datetime import datetime
 
-from mvi.monitoring.event import (
+from mineagent.monitoring.event import (
     Event,
     Start,
     Stop,

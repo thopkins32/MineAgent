@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from mvi.config import TDConfig
+from mineagent.config import TDConfig
 
 
 class TemporalDifferenceActorCritic:

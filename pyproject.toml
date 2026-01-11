@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mvi"
+name = "mineagent"
 version = "0.0.1"
 authors = [
     { name="Thomas Hopkins", email="thomas.hopkins.research@gmail.com" }
@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["mvi"]
+packages = ["mineagent"]
 
 [project.license]
 file = "LICENSE"
@@ -40,7 +40,7 @@ Homepage = "https://github.com/thomashopkins32/Minecraft-Virtual-Intelligence"
 Issues = "https://github.com/thomashopkins32/Minecraft-Virtual-Intelligence/issues"
 
 [project.scripts]
-mvi = "mvi.engine:run"
+mineagent = "mineagent.engine:run"
 
 [project.optional-dependencies]
 dev = [
@@ -76,7 +76,7 @@ openjdk = "21.*"
 
 
 [tool.pixi.pypi-dependencies]
-mvi = { path = ".", editable = true }
+mineagent = { path = ".", editable = true }
 MineDojo = { git = "https://github.com/thomashopkins32/MineDojo.git", rev = "main" }
 
 [tool.pixi.environments]
@@ -96,6 +96,6 @@ python = "3.11.*"
 python = "3.12.*"
 
 [tool.pixi.tasks]
-mvi = "mvi"
+mineagent = "mineagent"
 minecraft-client = "cd forge && gradle runClient"
 minecraft-build = "cd forge && gradle build"

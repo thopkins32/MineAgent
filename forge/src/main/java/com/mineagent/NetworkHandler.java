@@ -1,4 +1,4 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import com.mojang.logging.LogUtils;
 import java.io.IOException;
@@ -20,14 +20,14 @@ import org.slf4j.Logger;
 
 public class NetworkHandler implements Runnable {
   private static final Logger LOGGER = LogUtils.getLogger();
-  private static final String OBSERVATION_SOCKET_PATH = "/tmp/mvi_observation.sock";
-  private static final String ACTION_SOCKET_PATH = "/tmp/mvi_action.sock";
-  private static final ExecutorService observationExecutor = Executors.newCachedThreadPool();
-  private static final ExecutorService actionExecutor = Executors.newCachedThreadPool();
-  private Thread observationThread;
-  private Thread actionThread;
-  private ServerSocketChannel observationSocketChannel;
-  private ServerSocketChannel actionSocketChannel;
+  private static final String SEND_SOCKET_PATH = "/tmp/mineagent_send.sock";
+  private static final String RECEIVE_SOCKET_PATH = "/tmp/mineagent_receive.sock";
+  private static final ExecutorService senderExecutor = Executors.newCachedThreadPool();
+  private static final ExecutorService receiverExecutor = Executors.newCachedThreadPool();
+  private Thread sendThread;
+  private Thread receiveThread;
+  private ServerSocketChannel sendSocketChannel;
+  private ServerSocketChannel receiveSocketChannel;
   private final AtomicBoolean running = new AtomicBoolean(true);
 
   // Async observation sending

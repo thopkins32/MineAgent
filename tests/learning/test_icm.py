@@ -1,9 +1,9 @@
 import pytest
-from mvi.agent.agent import AgentV1
+from mineagent.agent.agent import AgentV1
 import torch
-from mvi.learning.icm import ICM
-from mvi.config import AgentConfig, PPOConfig, ICMConfig, TDConfig
-from mvi.memory.trajectory import TrajectoryBuffer
+from mineagent.learning.icm import ICM
+from mineagent.config import AgentConfig, PPOConfig, ICMConfig, TDConfig
+from mineagent.memory.trajectory import TrajectoryBuffer
 
 from tests.helper import ACTION_SPACE
 

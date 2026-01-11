@@ -1,4 +1,4 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import com.mojang.logging.LogUtils;
 import org.slf4j.Logger;

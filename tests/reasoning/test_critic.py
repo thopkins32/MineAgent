@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from mvi.reasoning.critic import LinearCritic
+from mineagent.reasoning.critic import LinearCritic
 
 
 EMBED_DIM = 64
