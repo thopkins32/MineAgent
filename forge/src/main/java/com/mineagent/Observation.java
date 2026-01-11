@@ -1,8 +1,7 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 public record Observation(
     double reward,
-    ActionState actionState,
     byte[] frame
 ) {
     public byte[] serialize() {

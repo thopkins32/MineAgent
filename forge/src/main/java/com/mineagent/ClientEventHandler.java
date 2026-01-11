@@ -10,123 +10,105 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.slf4j.Logger;
 
+/**
+ * Handles client-side game events and coordinates input injection with observations.
+ */
 public class ClientEventHandler {
-  private static final Logger LOGGER = LogUtils.getLogger();
-  private static DataBridge dataBridge = DataBridge.getInstance();
-  
-  @SubscribeEvent
-  public static void onServerStarting(ServerStartingEvent event) {
-    LOGGER.info("MineAgent Mod Server Starting - Network handler is managed on client side");
-  }
-
-  @SubscribeEvent
-  public static void onServerStopping(ServerStoppingEvent event) {
-    LOGGER.info("MineAgent Mod Server Stopping");
-  }
-
-  private static void processAction(Action action) {
-    Minecraft mc = Minecraft.getInstance();
-    ActionHandler.pressKeyMapping(mc.options.keyUp, action.up());
-    ActionHandler.pressKeyMapping(mc.options.keyDown, action.down());
-    ActionHandler.pressKeyMapping(mc.options.keyLeft, action.left());
-    ActionHandler.pressKeyMapping(mc.options.keyRight, action.right());
-    ActionHandler.pressKeyMapping(mc.options.keyJump, action.jump());
-    ActionHandler.pressKeyMapping(mc.options.keyShift, action.sneak());
-    ActionHandler.pressKeyMapping(mc.options.keySprint, action.sprint());
-    ActionHandler.clickKeyMapping(mc.options.keyInventory, action.inventory());
-    ActionHandler.clickKeyMapping(mc.options.keyDrop, action.drop());
-    ActionHandler.clickKeyMapping(mc.options.keySwapOffhand, action.swap());
-    ActionHandler.clickKeyMapping(mc.options.keyUse, action.use());
-    ActionHandler.clickKeyMapping(mc.options.keyAttack, action.attack());
-    ActionHandler.clickKeyMapping(mc.options.keyPickItem, action.pick_item());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[0], action.hotbar1());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[1], action.hotbar2());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[2], action.hotbar3());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[3], action.hotbar4());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[4], action.hotbar5());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[5], action.hotbar6());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[6], action.hotbar7());
-    ActionHandler.clickKeyMapping(mc.options.keyHotbarSlots[7], action.hotbar8());
-    ActionHandler.exitMenu(mc, action.exitMenu());
-    ActionHandler.handleMouseControl(mc, action.mouseControlX(), action.mouseControlY());
-    ActionHandler.rightMouseControl(mc, action.rightMouseDown());
-    ActionHandler.leftMouseControl(mc, action.leftMouseDown());
-  }
-
-  @SubscribeEvent
-  public static void onClientTick(TickEvent.ClientTickEvent event) {
-    Minecraft mc = Minecraft.getInstance();
-    if (mc.level != null && mc.player != null && event.phase == TickEvent.Phase.END) {
-      final Action action = dataBridge.getLatestAction();
-      if (action != null) {
-        processAction(action);
-      }
-      // int reward = packageReward();
-      final ActionState currentActionState = ActionHandler.getActionState(Minecraft.getInstance());
-      final byte[] frame = captureFrame();
-      dataBridge.sendObservation(new Observation(0.0, currentActionState, frame));
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final DataBridge dataBridge = DataBridge.getInstance();
+    
+    @SubscribeEvent
+    public static void onServerStarting(ServerStartingEvent event) {
+        LOGGER.info("MineAgent Mod Server Starting - Network handler is managed on client side");
     }
-  }
 
-  @SubscribeEvent
-  public static void onPlayerHurt(LivingHurtEvent event) {
-    // if (event.getEntity() instanceof Player) {
-    //   dataBridge.sendEvent("PLAYER_HURT", String.valueOf(event.getAmount()));
-    // }
-  }
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        LOGGER.info("MineAgent Mod Server Stopping");
+    }
 
-  @SubscribeEvent
-  public static void onPlayerDeath(LivingDeathEvent event) {
-    // if (event.getEntity() instanceof Player) {
-    //   dataBridge.sendEvent("PLAYER_DEATH", "-100.0");
-    // }
-  }
-  
-  private static byte[] captureFrame() {
-    Minecraft mc = Minecraft.getInstance();
-    return captureScreenshot(mc.getWindow());
-  }
+    /**
+     * Main game tick handler. Processes raw input and captures observations.
+     */
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level != null && mc.player != null && event.phase == TickEvent.Phase.END) {
+            // Handle input suppression when client is connected
+            handleInputSuppression(mc);
+            
+            // Process any pending raw input
+            final RawInput rawInput = dataBridge.getLatestRawInput();
+            if (rawInput != null) {
+                dataBridge.getInputInjector().inject(rawInput);
+            }
+            
+            // IMPORTANT: Maintain button state every tick for continuous actions
+            // This fires press events and sets KeyMapping states for held buttons
+            dataBridge.getInputInjector().maintainButtonState();
+            
+            // Capture and send observation
+            final byte[] frame = captureFrame();
+            dataBridge.sendObservation(new Observation(0.0, frame));
+        }
+    }
+    
+    /**
+     * Handles input suppression when a Python client is connected.
+     * Disables the system cursor to prevent real mouse input from interfering.
+     */
+    private static void handleInputSuppression(Minecraft mc) {
+        boolean clientConnected = dataBridge.isClientConnected();
+        boolean suppressMouse = Config.SUPPRESS_SYSTEM_MOUSE_INPUT.get();
+        boolean suppressKeyboard = Config.SUPPRESS_SYSTEM_KEYBOARD_INPUT.get();
+        
+        if (clientConnected && (suppressMouse || suppressKeyboard)) {
+            long windowHandle = mc.getWindow().getWindow();
+            
+            // Suppress mouse by hiding/disabling cursor
+            if (suppressMouse) {
+                GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+            }
+            
+            // Note: Keyboard suppression would require intercepting at a lower level
+            // For now, the agent's input will override via the GLFW handlers
+        }
+    }
 
-  private static byte[] captureScreenshot(Window window) {
-    int width = window.getWidth();
-    int height = window.getHeight();
+    @SubscribeEvent
+    public static void onPlayerHurt(LivingHurtEvent event) {
+        // Future: Calculate reward based on damage
+        // if (event.getEntity() instanceof Player) {
+        //     dataBridge.sendEvent("PLAYER_HURT", String.valueOf(event.getAmount()));
+        // }
+    }
 
-    ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 3);
-    GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
+    @SubscribeEvent
+    public static void onPlayerDeath(LivingDeathEvent event) {
+        // Future: Calculate negative reward on death
+        // if (event.getEntity() instanceof Player) {
+        //     dataBridge.sendEvent("PLAYER_DEATH", "-100.0");
+        // }
+    }
+    
+    private static byte[] captureFrame() {
+        Minecraft mc = Minecraft.getInstance();
+        return captureScreenshot(mc.getWindow());
+    }
 
-    byte[] bytes = new byte[buffer.capacity()];
-    buffer.get(bytes);
-    return bytes;
-  }
-  
-  /**
-   * Release all currently pressed keys (for cleanup on disconnect)
-   */
-  public static void releaseAllKeys() {
-    Minecraft mc = Minecraft.getInstance();
-    ActionHandler.pressKeyMapping(mc.options.keyUp, false);
-    ActionHandler.pressKeyMapping(mc.options.keyDown, false);
-    ActionHandler.pressKeyMapping(mc.options.keyLeft, false);
-    ActionHandler.pressKeyMapping(mc.options.keyRight, false);
-    ActionHandler.pressKeyMapping(mc.options.keyJump, false);
-    ActionHandler.pressKeyMapping(mc.options.keyShift, false);
-    ActionHandler.pressKeyMapping(mc.options.keySprint, false);
-    ActionHandler.pressKeyMapping(mc.options.keyInventory, false);
-    ActionHandler.pressKeyMapping(mc.options.keyDrop, false);
-    ActionHandler.pressKeyMapping(mc.options.keySwapOffhand, false);
-    ActionHandler.pressKeyMapping(mc.options.keyUse, false);
-    ActionHandler.pressKeyMapping(mc.options.keyAttack, false);
-    ActionHandler.pressKeyMapping(mc.options.keyPickItem, false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[0], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[1], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[2], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[3], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[4], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[5], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[6], false);
-    ActionHandler.pressKeyMapping(mc.options.keyHotbarSlots[7], false);
-  }
+    private static byte[] captureScreenshot(Window window) {
+        int width = window.getWidth();
+        int height = window.getHeight();
+
+        ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 3);
+        GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
+
+        byte[] bytes = new byte[buffer.capacity()];
+        buffer.get(bytes);
+        return bytes;
+    }
 }
