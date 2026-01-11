@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from mvi.agent.agent import AgentV1
-from mvi.config import AgentConfig, PPOConfig, ICMConfig, TDConfig
+from mineagent.agent.agent import AgentV1
+from mineagent.config import AgentConfig, PPOConfig, ICMConfig, TDConfig
 from tests.perception.test_visual import VISUAL_EXPECTED_PARAMS
 from tests.affector.test_affector import LINEAR_AFFECTOR_EXPECTED_PARAMS
 from tests.reasoning.test_critic import LINEAR_CRITIC_EXPECTED_PARAMS

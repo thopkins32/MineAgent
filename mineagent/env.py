@@ -27,8 +27,8 @@ logging.basicConfig(
 class ConnectionConfig:
     """Configuration for Minecraft Forge mod connection"""
 
-    command_port: str = "/tmp/mvi_receive.sock"
-    data_port: str = "/tmp/mvi_send.sock"
+    command_port: str = "/tmp/mineagent_receive.sock"
+    data_port: str = "/tmp/mineagent_send.sock"
     width: int = 320
     height: int = 240
     timeout: float = 30.0
@@ -403,7 +403,7 @@ def create_minecraft_env(
     Parameters
     ----------
     config : Config | None
-        MVI configuration object
+        MineAgent configuration object
     connection_config : ConnectionConfig | None
         Connection configuration for the Minecraft mod
 

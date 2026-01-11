@@ -1,4 +1,4 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import com.mojang.logging.LogUtils;
 import java.io.BufferedReader;
@@ -23,8 +23,8 @@ import org.slf4j.Logger;
 
 public class NetworkHandler implements Runnable {
   private static final Logger LOGGER = LogUtils.getLogger();
-  private static final String SEND_SOCKET_PATH = "/tmp/mvi_send.sock";
-  private static final String RECEIVE_SOCKET_PATH = "/tmp/mvi_receive.sock";
+  private static final String SEND_SOCKET_PATH = "/tmp/mineagent_send.sock";
+  private static final String RECEIVE_SOCKET_PATH = "/tmp/mineagent_receive.sock";
   private static final ExecutorService senderExecutor = Executors.newCachedThreadPool();
   private static final ExecutorService receiverExecutor = Executors.newCachedThreadPool();
   private Thread sendThread;

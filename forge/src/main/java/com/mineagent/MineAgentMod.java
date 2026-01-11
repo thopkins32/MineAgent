@@ -1,4 +1,4 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.logging.LogUtils;
@@ -14,16 +14,16 @@ import net.minecraftforge.fml.loading.FMLEnvironment;
 import org.slf4j.Logger;
 
 // The value here should match an entry in the META-INF/mods.toml file
-@Mod(MviMod.MODID)
-public class MviMod {
+@Mod(MineAgentMod.MODID)
+public class MineAgentMod {
   // Define mod id in a common place for everything to reference
-  public static final String MODID = "mvi";
+  public static final String MODID = "mineagent";
   // Directly reference a slf4j logger
   private static final Logger LOGGER = LogUtils.getLogger();
 
   private static Thread networkThread;
 
-  public MviMod(FMLJavaModLoadingContext context) {
+  public MineAgentMod(FMLJavaModLoadingContext context) {
     // Register client event handler
     MinecraftForge.EVENT_BUS.register(ClientEventHandler.class);
 

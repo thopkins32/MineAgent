@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from mvi.reasoning.critic import LinearCritic
-from mvi.learning.td import TemporalDifferenceActorCritic
-from mvi.config import TDConfig
+from mineagent.reasoning.critic import LinearCritic
+from mineagent.learning.td import TemporalDifferenceActorCritic
+from mineagent.config import TDConfig
 
 
 @pytest.fixture

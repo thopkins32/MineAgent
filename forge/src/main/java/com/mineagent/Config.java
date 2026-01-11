@@ -1,9 +1,9 @@
-package com.mvi.mvimod;
+package com.mineagent;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.common.Mod;
 
-@Mod.EventBusSubscriber(modid = MviMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
+@Mod.EventBusSubscriber(modid = MineAgentMod.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class Config {
 
   // Configuration Builder
@@ -29,11 +29,11 @@ public class Config {
 
     READ_PORT =
         BUILDER
-            .comment("Port for reading data from MVI client")
+            .comment("Port for reading data from MineAgent client")
             .defineInRange("read_port", 12345, 1024, 65535);
     WRITE_PORT =
         BUILDER
-            .comment("Port for sending data to MVI client")
+            .comment("Port for sending data to MineAgent client")
             .defineInRange("write_port", 12346, 1024, 65535);
 
     BUILDER.pop();

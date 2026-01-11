@@ -1,6 +1,6 @@
-from mvi.monitoring.event_bus import EventBus, get_event_bus, setup_event_bus
-from mvi.monitoring.event import Event
-from mvi.config import MonitoringConfig
+from mineagent.monitoring.event_bus import EventBus, get_event_bus, setup_event_bus
+from mineagent.monitoring.event import Event
+from mineagent.config import MonitoringConfig
 
 
 class MockEvent(Event):
@@ -129,9 +129,9 @@ def test_subscribe_return_value(mocker):
 def test_global_event_bus():
     """Test the global event bus singleton pattern."""
     # Reset the global event bus
-    import mvi.monitoring.event_bus
+    import mineagent.monitoring.event_bus
 
-    mvi.monitoring.event_bus._global_event_bus = None
+    mineagent.monitoring.event_bus._global_event_bus = None
 
     # Get the global event bus
     event_bus1 = get_event_bus()

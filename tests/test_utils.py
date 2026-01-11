@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from mvi.utils import discount_cumsum
+from mineagent.utils import discount_cumsum
 
 
 def test_discount_cumsum():

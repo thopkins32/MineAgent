@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from mvi.reasoning.dynamics import ForwardDynamics, InverseDynamics
+from mineagent.reasoning.dynamics import ForwardDynamics, InverseDynamics
 
 from tests.helper import ACTION_SPACE
 

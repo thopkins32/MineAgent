@@ -199,7 +199,7 @@ def get_config() -> Config:
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(
-        description="Specify arguments for running Minecraft Virtual Intelligence"
+        description="Specify arguments for running MineAgent"
     )
     parser.add_argument(
         "-f",
