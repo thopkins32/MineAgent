@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from mvi.memory.trajectory import TrajectoryBuffer
+from mineagent.memory.trajectory import TrajectoryBuffer
 
 
 MAX_BUFFER_SIZE = 10

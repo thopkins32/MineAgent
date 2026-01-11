@@ -2,7 +2,7 @@ import pytest
 import torch
 from torchvision.transforms.functional import center_crop  # type: ignore
 
-from mvi.perception.visual import (
+from mineagent.perception.visual import (
     VisualPerception,
     FoveatedPerception,
     PeripheralPerception,

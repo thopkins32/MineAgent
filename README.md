@@ -1,4 +1,4 @@
-# Minecraft Virtual Intelligence
+# MineAgent
 
 Welcome! This is a package intended for research into virtual intelligence in Minecraft.
 
@@ -37,8 +37,8 @@ pixi install
 If you want to a conda environment you can install like so:
 
 ```bash
-conda create -n mvi python=3.11
-conda activate mvi
+conda create -n mineagent python=3.11
+conda activate mineagent
 pip install .
 
 # Install custom MineDojo fork
@@ -52,23 +52,23 @@ cd ..
 
 ## Running the project
 
-To run the project, you can use the `mvi` command.
+To run the project, you can use the `mineagent` command.
 
 Either using Pixi:
 
 ```bash
-pixi run mvi
+pixi run mineagent
 ```
 
 Or if you installed with conda or venv:
 
 ```bash
-mvi
+mineagent
 ```
 
-This will start the project and you can use the `mvi` command to run the project starting from the `engine.run` function.
+This will start the project and you can use the `mineagent` command to run the project starting from the `engine.run` function.
 
-To view a list of all the commands you can use, run `mvi --help`.
+To view a list of all the commands you can use, run `mineagent --help`.
 
 ## Technologies
 

@@ -4,8 +4,8 @@ import os
 import shutil
 from datetime import datetime
 
-from mvi.monitoring.callbacks.tensorboard import TensorboardWriter
-from mvi.monitoring.event import (
+from mineagent.monitoring.callbacks.tensorboard import TensorboardWriter
+from mineagent.monitoring.event import (
     Action,
     Start,
     Stop,
@@ -14,7 +14,7 @@ from mvi.monitoring.event import (
     ModuleForwardStart,
     ModuleForwardEnd,
 )
-from mvi.config import TensorboardConfig
+from mineagent.config import TensorboardConfig
 
 
 def _verify_tensor_call(
