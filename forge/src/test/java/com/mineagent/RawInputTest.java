@@ -3,6 +3,7 @@ package com.mineagent;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,7 @@ class RawInputTest {
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
         int bufferSize = 1 + (keyCodes.length * 2) + 4 + 4 + 1 + 4 + 2 + textBytes.length;
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        buffer.order(ByteOrder.BIG_ENDIAN); // Match Python protocol (struct.pack with '>')
 
         buffer.put((byte) keyCodes.length);
         for (int keyCode : keyCodes) {

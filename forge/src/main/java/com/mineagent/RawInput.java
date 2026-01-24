@@ -1,6 +1,7 @@
 package com.mineagent;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 public record RawInput(
@@ -13,6 +14,7 @@ public record RawInput(
 ) {
     public static RawInput fromBytes(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        buffer.order(ByteOrder.BIG_ENDIAN); // Match Python protocol (struct.pack with '>')
         
         // Keys
         int numKeysPressed = buffer.get() & 0xFF;
