@@ -2,6 +2,7 @@ package com.mineagent;
 
 import com.mojang.logging.LogUtils;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -16,9 +17,23 @@ import org.slf4j.Logger;
  */
 public class InputInjector {
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    // Modifier keys
+    private static final Set<Integer> MODIFIER_KEYS = new HashSet<>(Arrays.asList(
+        GLFW.GLFW_KEY_LEFT_SHIFT,
+        GLFW.GLFW_KEY_RIGHT_SHIFT,
+        GLFW.GLFW_KEY_LEFT_CONTROL,
+        GLFW.GLFW_KEY_RIGHT_CONTROL,
+        GLFW.GLFW_KEY_LEFT_ALT,
+        GLFW.GLFW_KEY_RIGHT_ALT,
+        GLFW.GLFW_KEY_LEFT_SUPER,
+        GLFW.GLFW_KEY_RIGHT_SUPER,
+        GLFW.GLFW_KEY_MENU
+    ));
     
     // Key state tracking for press/release detection
     private Set<Integer> previouslyPressedKeys = new HashSet<>();
+    private int previousModifiers = 0;
     
     // Mouse button state tracking (bits: 0=left, 1=right, 2=middle)
     private byte previousMouseButtons = 0;
@@ -67,29 +82,36 @@ public class InputInjector {
             .boxed()
             .collect(Collectors.toSet());
         
+        // Find modifier keys and non-modifier keys
+        Set<Integer> modifierKeys = findModifierKeys(currentKeys);
+        Set<Integer> nonModifierKeys = currentKeys.stream()
+            .filter(key -> !modifierKeys.contains(key))
+            .collect(Collectors.toSet());
+        int modifiers = computeModifiers(modifierKeys);
+
         // Release keys that were pressed but are no longer
         for (int key : previouslyPressedKeys) {
-            if (!currentKeys.contains(key)) {
-                fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE);
+            if (!nonModifierKeys.contains(key)) {
+                fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE, previousModifiers);
             }
         }
         
         // Press keys that are newly pressed
-        for (int key : currentKeys) {
+        for (int key : nonModifierKeys) {
             if (!previouslyPressedKeys.contains(key)) {
-                fireKeyEvent(mc, window, key, GLFW.GLFW_PRESS);
+                fireKeyEvent(mc, window, key, GLFW.GLFW_PRESS, modifiers);
             }
         }
         
-        previouslyPressedKeys = currentKeys;
+        previouslyPressedKeys = nonModifierKeys;
+        previousModifiers = modifiers;
     }
     
     /**
      * Fires a key event through Minecraft's KeyboardHandler.
      */
-    private void fireKeyEvent(Minecraft mc, long window, int keyCode, int action) {
+    private void fireKeyEvent(Minecraft mc, long window, int keyCode, int action, int modifiers) {
         int scanCode = GLFW.glfwGetKeyScancode(keyCode);
-        int modifiers = computeModifiers();
         
         LOGGER.debug("Firing key event: keyCode={}, scanCode={}, action={}, mods={}", 
             keyCode, scanCode, action == GLFW.GLFW_PRESS ? "PRESS" : "RELEASE", modifiers);
@@ -97,22 +119,39 @@ public class InputInjector {
         // Call the same handler that GLFW callbacks use
         mc.keyboardHandler.keyPress(window, keyCode, scanCode, action, modifiers);
     }
+
+    /*
+     * Finds all modifier keys in a set of keys.
+     * 
+     * @param keys The set of keys to search
+     * @return The set of modifier keys, or an empty set if every key is a modifier
+     */
+    private Set<Integer> findModifierKeys(Set<Integer> keys) {
+        Set<Integer> modifiers = keys.stream()
+            .filter(MODIFIER_KEYS::contains)
+            .collect(Collectors.toSet());
+        // If every key is a modifier, treat as "not used as modifier" so return empty set
+        if (!modifiers.isEmpty() && modifiers.size() == keys.size()) {
+            return Collections.emptySet();
+        }
+        return modifiers;
+    }
     
     /**
      * Computes current modifier key state based on pressed keys.
      */
-    private int computeModifiers() {
+    private int computeModifiers(Set<Integer> modifierKeys) {
         int mods = 0;
-        if (previouslyPressedKeys.contains(GLFW.GLFW_KEY_LEFT_SHIFT) || 
-            previouslyPressedKeys.contains(GLFW.GLFW_KEY_RIGHT_SHIFT)) {
+        if (modifierKeys.contains(GLFW.GLFW_KEY_LEFT_SHIFT) || 
+            modifierKeys.contains(GLFW.GLFW_KEY_RIGHT_SHIFT)) {
             mods |= GLFW.GLFW_MOD_SHIFT;
         }
-        if (previouslyPressedKeys.contains(GLFW.GLFW_KEY_LEFT_CONTROL) || 
-            previouslyPressedKeys.contains(GLFW.GLFW_KEY_RIGHT_CONTROL)) {
+        if (modifierKeys.contains(GLFW.GLFW_KEY_LEFT_CONTROL) || 
+            modifierKeys.contains(GLFW.GLFW_KEY_RIGHT_CONTROL)) {
             mods |= GLFW.GLFW_MOD_CONTROL;
         }
-        if (previouslyPressedKeys.contains(GLFW.GLFW_KEY_LEFT_ALT) || 
-            previouslyPressedKeys.contains(GLFW.GLFW_KEY_RIGHT_ALT)) {
+        if (modifierKeys.contains(GLFW.GLFW_KEY_LEFT_ALT) || 
+            modifierKeys.contains(GLFW.GLFW_KEY_RIGHT_ALT)) {
             mods |= GLFW.GLFW_MOD_ALT;
         }
         return mods;
@@ -171,7 +210,7 @@ public class InputInjector {
      * and only fire release events on actual release transitions.
      */
     private void handleMouseButtons(Minecraft mc, long window, byte currentButtons) {
-        int modifiers = computeModifiers();
+        int modifiers = previousModifiers;
         
         // Check each button (0=left, 1=right, 2=middle)
         for (int button = 0; button < 3; button++) {
@@ -238,18 +277,19 @@ public class InputInjector {
             
             // Release all pressed keys
             for (int key : previouslyPressedKeys) {
-                fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE);
+                fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE, previousModifiers);
             }
             
             // Release all pressed mouse buttons
             for (int button = 0; button < 3; button++) {
                 if ((previousMouseButtons & (1 << button)) != 0) {
-                    mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, 0);
+                    mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, previousModifiers);
                 }
             }
         }
         
         previouslyPressedKeys.clear();
+        previousModifiers = 0;
         previousMouseButtons = 0;
         mouseInitialized = false;
         
@@ -276,6 +316,13 @@ public class InputInjector {
     public Set<Integer> getPressedKeys() {
         return new HashSet<>(previouslyPressedKeys);
     }
+
+    /**
+     * Gets the current modifier key state.
+     */
+    public int getModifiers() {
+        return previousModifiers;
+    }
     
     /**
      * Gets the current mouse button state.
@@ -297,7 +344,7 @@ public class InputInjector {
         // If any buttons are held, fire press events to maintain the state
         if (previousMouseButtons != 0) {
             long window = mc.getWindow().getWindow();
-            int modifiers = computeModifiers();
+            int modifiers = previousModifiers;
             
             for (int button = 0; button < 3; button++) {
                 if ((previousMouseButtons & (1 << button)) != 0) {
