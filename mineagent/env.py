@@ -49,9 +49,6 @@ class MinecraftForgeClient:
         self.connected: bool = False
         self.logger: logging.Logger = logging.getLogger(__name__)
 
-        # Delta encoding state
-        self.current_frame: np.ndarray | None = None
-
     def connect(self) -> bool:
         """
         Establish connection to the Minecraft Forge mod
@@ -68,7 +65,7 @@ class MinecraftForgeClient:
                 self.command_socket.settimeout(self.config.timeout)
                 self.command_socket.connect(self.config.command_port)
 
-                # Create Unix domain socket for frame data with performance optimizations
+                # Create Unix domain socket for frame data
                 self.data_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 self.data_socket.settimeout(self.config.timeout)
 
@@ -254,7 +251,6 @@ class MinecraftEnv(gym.Env[np.ndarray, np.int64]):
         # This will be expanded when action support is added
         self.action_space = spaces.Discrete(1)  # No-op action
 
-        self.current_frame = None
         self.step_count = 0
         self.logger = logging.getLogger(__name__)
 
@@ -287,18 +283,18 @@ class MinecraftEnv(gym.Env[np.ndarray, np.int64]):
         self.client.send_command("RESET")
 
         # Get initial frame
-        self.current_frame = self.client.receive_frame_data()
-        if self.current_frame is None:
+        current_frame = self.client.receive_frame_data()
+        if current_frame is None:
             self.logger.warning("No frame data received")
             # Return a black frame if we can't get data
             height, width = self.connection_config.width, self.connection_config.height
-            self.current_frame = np.zeros((height, width, 3), dtype=np.uint8)
+            current_frame = np.zeros((height, width, 3), dtype=np.uint8)
         else:
-            self.logger.info(f"Received frame data: {self.current_frame.shape}")
+            self.logger.info(f"Received frame data: {current_frame.shape}")
 
         self.step_count = 0
 
-        return self.current_frame, {"step_count": self.step_count}
+        return current_frame, {"step_count": self.step_count}
 
     def step(self, action) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """
@@ -319,12 +315,10 @@ class MinecraftEnv(gym.Env[np.ndarray, np.int64]):
         # Get new frame data
         new_frame = self.client.receive_frame_data()
         if new_frame is not None:
-            self.current_frame = self._resize_frame(new_frame)
-
-        # Ensure current_frame is never None
-        if self.current_frame is None:
+            current_frame = self._resize_frame(new_frame)
+        else:
             height, width = self.config.engine.image_size
-            self.current_frame = np.zeros((height, width, 3), dtype=np.uint8)
+            current_frame = np.zeros((height, width, 3), dtype=np.uint8)
 
         self.step_count += 1
 
@@ -335,26 +329,21 @@ class MinecraftEnv(gym.Env[np.ndarray, np.int64]):
 
         info = {"step_count": self.step_count, "frame_received": new_frame is not None}
 
-        return self.current_frame, reward, terminated, truncated, info
+        return current_frame, reward, terminated, truncated, info
 
     def render(self, mode: str = "rgb_array") -> np.ndarray | None:
         """
-        Render the environment
-
         Parameters
         ----------
         mode : str
-            Render mode (only "rgb_array" supported)
+            Render mode
 
-        Returns
-        -------
-        np.ndarray | None
-            Rendered frame as numpy array
+        Raises
+        ------
+        NotImplementedError
+            Rendering is not supported.
         """
-        if mode != "rgb_array":
-            raise ValueError(f"Unsupported render mode: {mode}")
-
-        return self.current_frame
+        raise NotImplementedError("Rendering is not supported.")
 
     def close(self):
         """Close the environment and disconnect from Minecraft"""

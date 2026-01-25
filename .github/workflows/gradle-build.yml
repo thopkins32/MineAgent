@@ -25,4 +25,4 @@ jobs:
       - name: Build with Gradle
         run: |
           cd forge
-          pixi run minecraft-build
+          pixi run gradle-build

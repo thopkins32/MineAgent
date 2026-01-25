@@ -27,6 +27,7 @@ dependencies = [
     "torchvision",
     "tqdm",
     "tensorboard",
+    "pyright",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -45,7 +46,6 @@ mineagent = "mineagent.engine:run"
 [project.optional-dependencies]
 dev = [
     "pre-commit",
-    "pyright",
     "pytest",
     "pytest-mock",
     "ruff",
@@ -58,20 +58,18 @@ typeCheckingMode = "standard"
 reportMissingImports = true
 exclude = ["**/build"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge", "pytorch"]
 platforms = ["linux-64"]
 
-[tool.pixi.host-dependencies]
-hatchling = "*"
-
 [tool.pixi.dependencies]
+hatchling = "*"
 pytorch = "*"
 torchvision = "*"
 numpy = "==1.26.4"
 scipy = "*"
 tensorboard = "*"
-gradle = "*"
+gradle = "<9.0.0"
 openjdk = "21.*"
 
 
@@ -82,20 +80,16 @@ MineDojo = { git = "https://github.com/thomashopkins32/MineDojo.git", rev = "mai
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
-py310 = { features = ["py310"] }
-py311 = { features = ["py311"] }
 py312 = { features = ["py312"] }
-
-[tool.pixi.feature.py310.dependencies]
-python = "3.10.*"
-
-[tool.pixi.feature.py311.dependencies]
-python = "3.11.*"
 
 [tool.pixi.feature.py312.dependencies]
 python = "3.12.*"
 
+[tool.pixi.feature.dev.dependencies]
+nodejs = ">=18"
+
 [tool.pixi.tasks]
 mineagent = "mineagent"
-minecraft-client = "cd forge && gradle runClient"
-minecraft-build = "cd forge && gradle build"
+gradle-run-client = "cd forge && gradle runClient"
+gradle-build = "cd forge && gradle build"
+gradle-test = "cd forge && gradle test"
