@@ -5,13 +5,11 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.glfw.GLFW;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
-import org.mockito.quality.Strictness;
 
 class InputInjectorTest {
 
@@ -39,11 +37,7 @@ class InputInjectorTest {
 
       verify(fixture.getKeyboardHandler(), times(1))
           .keyPress(
-              eq(WINDOW_HANDLE),
-              keyCodeCaptor.capture(),
-              anyInt(),
-              actionCaptor.capture(),
-              eq(0));
+              eq(WINDOW_HANDLE), keyCodeCaptor.capture(), anyInt(), actionCaptor.capture(), eq(0));
 
       assertEquals(GLFW.GLFW_KEY_W, keyCodeCaptor.getValue());
       assertEquals(GLFW.GLFW_PRESS, actionCaptor.getValue());
@@ -56,7 +50,8 @@ class InputInjectorTest {
       mockedMinecraft.when(Minecraft::getInstance).thenReturn(fixture.getMinecraft());
 
       // First inject with W key (press)
-      RawInput pressInput = new RawInput(new int[] {GLFW.GLFW_KEY_W}, 0.0f, 0.0f, (byte) 0, 0.0f, "");
+      RawInput pressInput =
+          new RawInput(new int[] {GLFW.GLFW_KEY_W}, 0.0f, 0.0f, (byte) 0, 0.0f, "");
       injector.inject(pressInput);
 
       // Then inject with no keys (release)
@@ -130,11 +125,7 @@ class InputInjectorTest {
       // Shift should fire as a regular key when pressed alone
       verify(fixture.getKeyboardHandler(), times(1))
           .keyPress(
-              eq(WINDOW_HANDLE),
-              keyCodeCaptor.capture(),
-              anyInt(),
-              eq(GLFW.GLFW_PRESS),
-              eq(0));
+              eq(WINDOW_HANDLE), keyCodeCaptor.capture(), anyInt(), eq(GLFW.GLFW_PRESS), eq(0));
 
       assertEquals(GLFW.GLFW_KEY_LEFT_SHIFT, keyCodeCaptor.getValue());
     }
@@ -195,7 +186,7 @@ class InputInjectorTest {
       fixture.setMinecraftField("player", player);
       // Set screen to null using fixture helper
       fixture.setMinecraftField("screen", null);
-      
+
       // Mock sensitivity() to return an OptionInstance that returns 0.5
       net.minecraft.client.OptionInstance<Double> sensitivityOption =
           mock(net.minecraft.client.OptionInstance.class, withSettings().strictness(Strictness.LENIENT));

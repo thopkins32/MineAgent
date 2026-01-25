@@ -69,7 +69,7 @@ torchvision = "*"
 numpy = "==1.26.4"
 scipy = "*"
 tensorboard = "*"
-gradle = "*"
+gradle = "<9.0.0"
 openjdk = "21.*"
 
 

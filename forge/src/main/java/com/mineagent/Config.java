@@ -81,7 +81,8 @@ public class Config {
 
     SUPPRESS_SYSTEM_MOUSE_INPUT =
         BUILDER
-            .comment("If true, disables OS cursor when Python client is connected for agent mouse control")
+            .comment(
+                "If true, disables OS cursor when Python client is connected for agent mouse control")
             .define("suppress_system_mouse_input", true);
 
     SUPPRESS_SYSTEM_KEYBOARD_INPUT =
