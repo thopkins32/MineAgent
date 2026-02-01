@@ -1,0 +1,20 @@
+{
+  "name": "MineAgent",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "pixi install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.pixi/envs/default/bin/python"
+      }
+    }
+  },
+  "forwardPorts": [],
+  "remoteUser": "vscode"
+}
