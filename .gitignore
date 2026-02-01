@@ -202,3 +202,6 @@ forge/run-data/
 
 # Cursor
 .cursor/
+
+# Dev containers
+.devcontainer/
