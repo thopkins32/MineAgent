@@ -75,7 +75,7 @@ openjdk = "21.*"
 
 [tool.pixi.pypi-dependencies]
 mineagent = { path = ".", editable = true }
-MineDojo = { git = "https://github.com/thomashopkins32/MineDojo.git", rev = "main" }
+MineDojo = { git = "https://github.com/thopkins32/MineDojo.git", rev = "main" }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
