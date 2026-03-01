@@ -18,7 +18,7 @@ jobs:
         with:
           pixi-version: v0.60.0
           cache: false
-          frozen: true
+          frozen: false
           locked: true
           environments: "default"
 
