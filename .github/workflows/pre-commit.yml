@@ -14,10 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install python packages
-        uses: ./.github/actions/install_requirements
-
-      - name: Run pre-commit
-        uses: pre-commit/action@v3.0.1
+      - uses: prefix-dev/setup-pixi@v0.9.4
         with:
-          args: --all-files
+          pixi-version: v0.62.2
+          cache: false
+          frozen: true
+          locked: false
+          environments: "dev"
+
+      - name: Run pytest
+        run: pixi run -e dev pre-commit run --all-files
+
