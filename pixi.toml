@@ -12,7 +12,6 @@ tensorboard = "*"
 gradle = "<9.0.0"
 openjdk = "21.*"
 
-
 [pypi-dependencies]
 mineagent = { path = ".", editable = true }
 
@@ -22,6 +21,9 @@ dev = { features = ["dev"], solve-group = "default" }
 
 [feature.dev.dependencies]
 nodejs = ">=18"
+
+[feature.dev.pypi-dependencies]
+mineagent = { path = ".", editable = true, extras = ["dev"] }
 
 [tasks]
 mineagent = "mineagent"
