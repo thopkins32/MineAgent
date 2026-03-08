@@ -47,6 +47,7 @@ mineagent = "mineagent.engine:run"
 dev = [
     "pre-commit",
     "pytest",
+    "pytest-asyncio",
     "pytest-mock",
     "ruff",
     "types-PyYAML",
