@@ -1,8 +1,9 @@
 import struct
 
+import numpy as np
 import pytest
 
-from mineagent.client.protocol import GLFW, RawInput
+from mineagent.client.protocol import GLFW, RawInput, parse_observation
 
 
 # --- to_bytes serialization ---
@@ -182,3 +183,94 @@ def test_release_all():
     assert raw.mouse_buttons == 0
     assert raw.scroll_delta == 0.0
     assert raw.text == ""
+
+
+# --- parse_observation ---
+
+FRAME_HEIGHT = 4
+FRAME_WIDTH = 4
+FRAME_SHAPE = (FRAME_HEIGHT, FRAME_WIDTH)
+FRAME_NUM_BYTES = FRAME_HEIGHT * FRAME_WIDTH * 3
+
+
+def _build_header(reward: float, frame_length: int) -> bytes:
+    return struct.pack(">d", reward) + struct.pack(">I", frame_length)
+
+
+def test_parse_observation():
+    reward = 2.5
+    frame_data = bytes(range(FRAME_NUM_BYTES % 256)) * (
+        FRAME_NUM_BYTES // (FRAME_NUM_BYTES % 256) + 1
+    )
+    frame_data = frame_data[:FRAME_NUM_BYTES]
+    header = _build_header(reward, len(frame_data))
+
+    obs = parse_observation(header, frame_data, FRAME_SHAPE)
+
+    assert obs.reward == reward
+    assert obs.frame.shape == (FRAME_HEIGHT, FRAME_WIDTH, 3)
+    assert obs.frame.dtype == np.uint8
+
+
+def test_parse_observation_zero_reward():
+    frame_data = b"\x00" * FRAME_NUM_BYTES
+    header = _build_header(0.0, FRAME_NUM_BYTES)
+
+    obs = parse_observation(header, frame_data, FRAME_SHAPE)
+
+    assert obs.reward == 0.0
+    assert obs.frame.shape == (FRAME_HEIGHT, FRAME_WIDTH, 3)
+    assert np.all(obs.frame == 0)
+
+
+def test_parse_observation_negative_reward():
+    frame_data = b"\xff" * FRAME_NUM_BYTES
+    header = _build_header(-100.0, FRAME_NUM_BYTES)
+
+    obs = parse_observation(header, frame_data, FRAME_SHAPE)
+
+    assert obs.reward == -100.0
+    assert np.all(obs.frame == 255)
+
+
+def test_parse_observation_frame_values():
+    frame_array = np.arange(FRAME_NUM_BYTES, dtype=np.uint8)
+    frame_data = frame_array.tobytes()
+    header = _build_header(1.0, FRAME_NUM_BYTES)
+
+    obs = parse_observation(header, frame_data, FRAME_SHAPE)
+
+    expected = frame_array.reshape(FRAME_HEIGHT, FRAME_WIDTH, 3)
+    np.testing.assert_array_equal(obs.frame, expected)
+
+
+def test_parse_observation_invalid_header_length():
+    with pytest.raises(ValueError, match="Header must be 12 bytes"):
+        parse_observation(b"\x00" * 8, b"\x00" * FRAME_NUM_BYTES, FRAME_SHAPE)
+
+
+def test_parse_observation_frame_length_mismatch():
+    wrong_length = FRAME_NUM_BYTES + 1
+    header = _build_header(0.0, wrong_length)
+
+    with pytest.raises(ValueError, match="Frame length mismatch"):
+        parse_observation(header, b"\x00" * FRAME_NUM_BYTES, FRAME_SHAPE)
+
+
+def test_parse_observation_frame_size_mismatch():
+    bad_frame = b"\x00" * (FRAME_NUM_BYTES - 1)
+    header = _build_header(0.0, len(bad_frame))
+
+    with pytest.raises(ValueError, match="Frame data size mismatch"):
+        parse_observation(header, bad_frame, FRAME_SHAPE)
+
+
+def test_parse_observation_default_frame_shape():
+    height, width = 240, 320
+    num_bytes = height * width * 3
+    frame_data = b"\x00" * num_bytes
+    header = _build_header(0.0, num_bytes)
+
+    obs = parse_observation(header, frame_data)
+
+    assert obs.frame.shape == (240, 320, 3)
