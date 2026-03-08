@@ -1,7 +1,10 @@
+import struct
 import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Protocol
+
+import numpy as np
 
 from .protocol import Observation, RawInput, parse_observation
 
@@ -140,6 +143,3 @@ class AsyncMinecraftClient:
             self._connected = False
             return None
 
-
-import struct
-import numpy as np
