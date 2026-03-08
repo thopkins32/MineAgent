@@ -81,7 +81,7 @@ async def test_connect_success(client):
 
 
 @pytest.mark.asyncio
-def test_connect_failure_retries(client):
+async def test_connect_failure_retries(client):
     call_count = 0
 
     async def fake_open(path):
@@ -110,7 +110,7 @@ async def test_disconnect(client):
 
 
 @pytest.mark.asyncio
-def test_send_action(client):
+async def test_send_action(client):
     raw_input = RawInput(key_codes=[87], mouse_dx=1.0, mouse_dy=-1.0)
     expected_bytes = raw_input.to_bytes()
 
@@ -124,13 +124,13 @@ def test_send_action(client):
 
 
 @pytest.mark.asyncio
-def test_send_action_not_connected(client):
+async def test_send_action_not_connected(client):
     result = await client.send_action(RawInput())
     assert result is False
 
 
 @pytest.mark.asyncio
-def test_receive_observation(client):
+async def test_receive_observation(client):
     reward = 1.5
     frame_bytes = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8).tobytes()
     header, frame_data = _build_observation_bytes(reward, frame_bytes)
@@ -146,7 +146,7 @@ def test_receive_observation(client):
 
 
 @pytest.mark.asyncio
-def test_receive_observation_incomplete(client):
+async def test_receive_observation_incomplete(client):
     reader, _ = await _connect_client(client)
     reader.readexactly = AsyncMock(
         side_effect=asyncio.IncompleteReadError(partial=b"", expected=12)
@@ -158,6 +158,6 @@ def test_receive_observation_incomplete(client):
 
 
 @pytest.mark.asyncio
-def test_receive_observation_not_connected(client):
+async def test_receive_observation_not_connected(client):
     obs = await client.receive_observation()
     assert obs is None
