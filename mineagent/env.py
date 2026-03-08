@@ -90,9 +90,7 @@ class MinecraftEnv(gym.Env):
 
         return frame, {"step_count": self._step_count, "reward": self._last_reward}
 
-    def step(
-        self, action: int
-    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         obs = self._run_async(self._client.receive_observation())
 
         if obs is not None:

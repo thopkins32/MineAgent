@@ -56,7 +56,10 @@ async def _connect_client(client: AsyncMinecraftClient):
             return (reader, MagicMock())
         return (MagicMock(), writer)
 
-    with patch("mineagent.client.connection.asyncio.open_unix_connection", side_effect=fake_open):
+    with patch(
+        "mineagent.client.connection.asyncio.open_unix_connection",
+        side_effect=fake_open,
+    ):
         result = await client.connect()
 
     assert result is True
@@ -73,7 +76,10 @@ async def test_connect_success(client):
             return (reader, MagicMock())
         return (MagicMock(), writer)
 
-    with patch("mineagent.client.connection.asyncio.open_unix_connection", side_effect=fake_open):
+    with patch(
+        "mineagent.client.connection.asyncio.open_unix_connection",
+        side_effect=fake_open,
+    ):
         result = await client.connect()
 
     assert result is True
@@ -89,7 +95,10 @@ async def test_connect_failure_retries(client):
         call_count += 1
         raise OSError("Connection refused")
 
-    with patch("mineagent.client.connection.asyncio.open_unix_connection", side_effect=fake_open):
+    with patch(
+        "mineagent.client.connection.asyncio.open_unix_connection",
+        side_effect=fake_open,
+    ):
         result = await client.connect()
 
     assert result is False

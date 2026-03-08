@@ -1,6 +1,5 @@
 import struct
 from dataclasses import dataclass, field
-from typing import Callable
 
 import numpy as np
 

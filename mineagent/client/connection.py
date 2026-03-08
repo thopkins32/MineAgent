@@ -2,7 +2,6 @@ import struct
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Protocol
 
 import numpy as np
 
@@ -61,7 +60,9 @@ class AsyncMinecraftClient:
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(self.config.retry_delay)
                 else:
-                    self._logger.error("Failed to connect after %d attempts", self.config.max_retries)
+                    self._logger.error(
+                        "Failed to connect after %d attempts", self.config.max_retries
+                    )
                     return False
         return False
 
@@ -126,7 +127,13 @@ class AsyncMinecraftClient:
             frame_length = struct.unpack(">I", header[8:12])[0]
 
             if frame_length == 0:
-                return Observation(reward=reward, frame=np.zeros((self.config.frame_height, self.config.frame_width, 3), dtype=np.uint8))
+                return Observation(
+                    reward=reward,
+                    frame=np.zeros(
+                        (self.config.frame_height, self.config.frame_width, 3),
+                        dtype=np.uint8,
+                    ),
+                )
 
             frame_data = await self._observation_reader.readexactly(frame_length)
 
@@ -142,4 +149,3 @@ class AsyncMinecraftClient:
             self._logger.error("Failed to receive observation: %s", e)
             self._connected = False
             return None
-

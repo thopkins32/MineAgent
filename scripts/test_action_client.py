@@ -10,7 +10,6 @@ import socket
 import struct
 import time
 import threading
-from dataclasses import dataclass
 from typing import Optional
 import argparse
 
