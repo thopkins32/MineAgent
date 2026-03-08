@@ -10,264 +10,10 @@ import socket
 import struct
 import time
 import threading
-from dataclasses import dataclass, field
 from typing import Optional
 import argparse
 
-
-# =============================================================================
-# GLFW Key Code Constants
-# Reference: https://www.glfw.org/docs/3.3/group__keys.html
-# =============================================================================
-
-
-class GLFW:
-    """GLFW key and mouse button constants."""
-
-    # Printable keys
-    KEY_SPACE = 32
-    KEY_APOSTROPHE = 39
-    KEY_COMMA = 44
-    KEY_MINUS = 45
-    KEY_PERIOD = 46
-    KEY_SLASH = 47
-    KEY_0 = 48
-    KEY_1 = 49
-    KEY_2 = 50
-    KEY_3 = 51
-    KEY_4 = 52
-    KEY_5 = 53
-    KEY_6 = 54
-    KEY_7 = 55
-    KEY_8 = 56
-    KEY_9 = 57
-    KEY_SEMICOLON = 59
-    KEY_EQUAL = 61
-    KEY_A = 65
-    KEY_B = 66
-    KEY_C = 67
-    KEY_D = 68
-    KEY_E = 69
-    KEY_F = 70
-    KEY_G = 71
-    KEY_H = 72
-    KEY_I = 73
-    KEY_J = 74
-    KEY_K = 75
-    KEY_L = 76
-    KEY_M = 77
-    KEY_N = 78
-    KEY_O = 79
-    KEY_P = 80
-    KEY_Q = 81
-    KEY_R = 82
-    KEY_S = 83
-    KEY_T = 84
-    KEY_U = 85
-    KEY_V = 86
-    KEY_W = 87
-    KEY_X = 88
-    KEY_Y = 89
-    KEY_Z = 90
-    KEY_LEFT_BRACKET = 91
-    KEY_BACKSLASH = 92
-    KEY_RIGHT_BRACKET = 93
-    KEY_GRAVE_ACCENT = 96
-
-    # Function keys
-    KEY_ESCAPE = 256
-    KEY_ENTER = 257
-    KEY_TAB = 258
-    KEY_BACKSPACE = 259
-    KEY_INSERT = 260
-    KEY_DELETE = 261
-    KEY_RIGHT = 262
-    KEY_LEFT = 263
-    KEY_DOWN = 264
-    KEY_UP = 265
-    KEY_PAGE_UP = 266
-    KEY_PAGE_DOWN = 267
-    KEY_HOME = 268
-    KEY_END = 269
-    KEY_CAPS_LOCK = 280
-    KEY_SCROLL_LOCK = 281
-    KEY_NUM_LOCK = 282
-    KEY_PRINT_SCREEN = 283
-    KEY_PAUSE = 284
-    KEY_F1 = 290
-    KEY_F2 = 291
-    KEY_F3 = 292
-    KEY_F4 = 293
-    KEY_F5 = 294
-    KEY_F6 = 295
-    KEY_F7 = 296
-    KEY_F8 = 297
-    KEY_F9 = 298
-    KEY_F10 = 299
-    KEY_F11 = 300
-    KEY_F12 = 301
-
-    # Modifier keys
-    KEY_LEFT_SHIFT = 340
-    KEY_LEFT_CONTROL = 341
-    KEY_LEFT_ALT = 342
-    KEY_LEFT_SUPER = 343
-    KEY_RIGHT_SHIFT = 344
-    KEY_RIGHT_CONTROL = 345
-    KEY_RIGHT_ALT = 346
-    KEY_RIGHT_SUPER = 347
-    KEY_MENU = 348
-
-    # Mouse buttons
-    MOUSE_BUTTON_LEFT = 0
-    MOUSE_BUTTON_RIGHT = 1
-    MOUSE_BUTTON_MIDDLE = 2
-
-
-# Command name to GLFW key code mapping
-COMMAND_TO_KEY = {
-    # Movement (Minecraft default bindings)
-    "w": GLFW.KEY_W,
-    "forward": GLFW.KEY_W,
-    "s": GLFW.KEY_S,
-    "back": GLFW.KEY_S,
-    "a": GLFW.KEY_A,
-    "left": GLFW.KEY_A,
-    "d": GLFW.KEY_D,
-    "right": GLFW.KEY_D,
-    "space": GLFW.KEY_SPACE,
-    "jump": GLFW.KEY_SPACE,
-    "shift": GLFW.KEY_LEFT_SHIFT,
-    "sneak": GLFW.KEY_LEFT_SHIFT,
-    "ctrl": GLFW.KEY_LEFT_CONTROL,
-    "sprint": GLFW.KEY_LEFT_CONTROL,
-    # Interaction
-    "e": GLFW.KEY_E,
-    "inventory": GLFW.KEY_E,
-    "q": GLFW.KEY_Q,
-    "drop": GLFW.KEY_Q,
-    "f": GLFW.KEY_F,
-    "swap": GLFW.KEY_F,
-    # Hotbar (number keys)
-    "1": GLFW.KEY_1,
-    "hotbar1": GLFW.KEY_1,
-    "2": GLFW.KEY_2,
-    "hotbar2": GLFW.KEY_2,
-    "3": GLFW.KEY_3,
-    "hotbar3": GLFW.KEY_3,
-    "4": GLFW.KEY_4,
-    "hotbar4": GLFW.KEY_4,
-    "5": GLFW.KEY_5,
-    "hotbar5": GLFW.KEY_5,
-    "6": GLFW.KEY_6,
-    "hotbar6": GLFW.KEY_6,
-    "7": GLFW.KEY_7,
-    "hotbar7": GLFW.KEY_7,
-    "8": GLFW.KEY_8,
-    "hotbar8": GLFW.KEY_8,
-    "9": GLFW.KEY_9,
-    "hotbar9": GLFW.KEY_9,
-    # Special keys
-    "esc": GLFW.KEY_ESCAPE,
-    "escape": GLFW.KEY_ESCAPE,
-    "enter": GLFW.KEY_ENTER,
-    "tab": GLFW.KEY_TAB,
-    "t": GLFW.KEY_T,  # Chat
-    "chat": GLFW.KEY_T,
-    "/": GLFW.KEY_SLASH,  # Command
-    "command": GLFW.KEY_SLASH,
-}
-
-
-# =============================================================================
-# RawInput Data Class
-# =============================================================================
-
-
-@dataclass
-class RawInput:
-    """
-    Raw input data to send to Minecraft.
-
-    Protocol format (variable size):
-    - 1 byte: numKeysPressed (0-255)
-    - N*2 bytes: keyCodes (shorts, big-endian)
-    - 4 bytes: mouseDeltaX (float, big-endian)
-    - 4 bytes: mouseDeltaY (float, big-endian)
-    - 1 byte: mouseButtons (bits: 0=left, 1=right, 2=middle)
-    - 4 bytes: scrollDelta (float, big-endian)
-    - 2 bytes: textLength (big-endian)
-    - M bytes: textBytes (UTF-8)
-    """
-
-    key_codes: list[int] = field(default_factory=list)
-    mouse_dx: float = 0.0
-    mouse_dy: float = 0.0
-    mouse_buttons: int = 0  # Bit flags: 0=left, 1=right, 2=middle
-    scroll_delta: float = 0.0
-    text: str = ""
-
-    def to_bytes(self) -> bytes:
-        """Convert to binary protocol format."""
-        data = bytearray()
-
-        # Number of keys (1 byte)
-        num_keys = len(self.key_codes)
-        if num_keys > 255:
-            raise ValueError(f"Too many keys pressed: {num_keys} (max 255)")
-        data.append(num_keys)
-
-        # Key codes (N * 2 bytes, big-endian shorts)
-        for key_code in self.key_codes:
-            data.extend(struct.pack(">h", key_code))
-
-        # Mouse delta X (4 bytes, big-endian float)
-        data.extend(struct.pack(">f", self.mouse_dx))
-
-        # Mouse delta Y (4 bytes, big-endian float)
-        data.extend(struct.pack(">f", self.mouse_dy))
-
-        # Mouse buttons (1 byte)
-        data.append(self.mouse_buttons & 0xFF)
-
-        # Scroll delta (4 bytes, big-endian float)
-        data.extend(struct.pack(">f", self.scroll_delta))
-
-        # Text length and content
-        text_bytes = self.text.encode("utf-8")
-        text_length = len(text_bytes)
-        if text_length > 65535:
-            raise ValueError(f"Text too long: {text_length} bytes (max 65535)")
-        data.extend(struct.pack(">H", text_length))
-        data.extend(text_bytes)
-
-        return bytes(data)
-
-    def set_left_mouse(self, pressed: bool):
-        """Set left mouse button state."""
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_LEFT
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_LEFT)
-
-    def set_right_mouse(self, pressed: bool):
-        """Set right mouse button state."""
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_RIGHT
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_RIGHT)
-
-    def set_middle_mouse(self, pressed: bool):
-        """Set middle mouse button state."""
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_MIDDLE
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_MIDDLE)
-
-
-# =============================================================================
-# Test Clients
-# =============================================================================
+from mineagent.client import GLFW, RawInput, COMMAND_TO_KEY
 
 
 class RawInputTestClient:
@@ -359,19 +105,16 @@ class ObservationTestClient:
 
         try:
             while self.running:
-                # Read reward (8 bytes, double)
                 reward_data = self._read_exact(8)
                 if not reward_data:
                     break
                 reward = struct.unpack(">d", reward_data)[0]
 
-                # Read frame length (4 bytes, int)
                 length_data = self._read_exact(4)
                 if not length_data:
                     break
                 frame_length = struct.unpack(">I", length_data)[0]
 
-                # Read frame data
                 frame_data = self._read_exact(frame_length)
                 if not frame_data:
                     break
@@ -399,11 +142,6 @@ class ObservationTestClient:
             except Exception:
                 return None
         return data
-
-
-# =============================================================================
-# Command Parsing and Help
-# =============================================================================
 
 
 def show_help():
@@ -474,7 +212,7 @@ class HeldState:
 
     def __init__(self):
         self.keys: set[int] = set()
-        self.mouse_buttons: int = 0  # Bit flags: 0=left, 1=right, 2=middle
+        self.mouse_buttons: int = 0
 
     def set_mouse_button(self, button: int, pressed: bool):
         """Set a mouse button state. button: 0=left, 1=right, 2=middle"""
@@ -503,7 +241,6 @@ def parse_command(
     Returns:
         RawInput to send, or None if command was informational only
     """
-    # Use held_state if provided, otherwise fall back to old behavior
     if held_state is None:
         held_state = HeldState()
         held_state.keys = held_keys
@@ -514,14 +251,12 @@ def parse_command(
 
     main_command = parts[0]
 
-    # Handle special commands
     if main_command in ["help", "h", "?"]:
         show_help()
         return None
 
     raw_input = RawInput()
 
-    # Mouse movement
     if main_command == "mouse" and len(parts) >= 3:
         try:
             raw_input.mouse_dx = float(parts[1])
@@ -533,7 +268,6 @@ def parse_command(
             print("✗ Invalid mouse coordinates. Use: mouse <x> <y>")
             return None
 
-    # Scroll wheel
     if main_command == "scroll" and len(parts) >= 2:
         try:
             raw_input.scroll_delta = float(parts[1])
@@ -544,23 +278,18 @@ def parse_command(
             print("✗ Invalid scroll amount. Use: scroll <amount>")
             return None
 
-    # Text input
     if main_command == "text" and len(parts) >= 2:
         raw_input.text = " ".join(parts[1:])
         raw_input.key_codes = list(held_state.keys)
         raw_input.mouse_buttons = held_state.mouse_buttons
         return raw_input
 
-    # Chat shortcut - returns a list of RawInputs to send in sequence
     if main_command == "say" and len(parts) >= 2:
         message = " ".join(parts[1:])
-        # Return special marker - will be handled by caller
         raw_input.key_codes = [GLFW.KEY_T]
-        raw_input.text = f"__SAY__{message}"  # Special marker for say command
+        raw_input.text = f"__SAY__{message}"
         return raw_input
 
-    # Mouse clicks (single shot - press then immediately release)
-    # These are one-shot and don't modify held state
     if main_command == "lclick":
         raw_input.mouse_buttons = held_state.mouse_buttons | (
             1 << GLFW.MOUSE_BUTTON_LEFT
@@ -580,7 +309,6 @@ def parse_command(
         raw_input.key_codes = list(held_state.keys)
         return raw_input
 
-    # Mouse hold/release - these modify the held state
     if main_command == "ldown":
         held_state.set_mouse_button(GLFW.MOUSE_BUTTON_LEFT, True)
         raw_input.mouse_buttons = held_state.mouse_buttons
@@ -602,13 +330,11 @@ def parse_command(
         raw_input.key_codes = list(held_state.keys)
         return raw_input
 
-    # Release all keys and mouse buttons
     if main_command == "release":
         held_keys.clear()
         held_state.clear()
-        return raw_input  # Empty state releases all
+        return raw_input
 
-    # Combo command (press multiple keys together, then release)
     if main_command == "combo" and len(parts) > 1:
         for action_name in parts[1:]:
             if action_name in COMMAND_TO_KEY:
@@ -616,23 +342,20 @@ def parse_command(
         raw_input.mouse_buttons = held_state.mouse_buttons
         return raw_input
 
-    # Hold command (add to held keys)
     if main_command == "hold" and len(parts) > 1:
         for action_name in parts[1:]:
             if action_name in COMMAND_TO_KEY:
                 held_state.keys.add(COMMAND_TO_KEY[action_name])
-                held_keys.add(COMMAND_TO_KEY[action_name])  # Keep old behavior too
+                held_keys.add(COMMAND_TO_KEY[action_name])
         raw_input.key_codes = list(held_state.keys)
         raw_input.mouse_buttons = held_state.mouse_buttons
         return raw_input
 
-    # Single key command (momentary press - does NOT add to held state)
     if main_command in COMMAND_TO_KEY:
         raw_input.key_codes = [COMMAND_TO_KEY[main_command]]
         raw_input.mouse_buttons = held_state.mouse_buttons
         return raw_input
 
-    # Try to interpret as raw key code
     try:
         key_code = int(main_command)
         raw_input.key_codes = [key_code]
@@ -645,26 +368,19 @@ def parse_command(
     return None
 
 
-# =============================================================================
-# Main Functions
-# =============================================================================
-
-
 def run_interactive_mode():
     """Run interactive mode for testing raw input."""
     client = RawInputTestClient()
     observation_client = ObservationTestClient()
     held_state = HeldState()
-    held_keys = held_state.keys  # For backward compatibility
+    held_keys = held_state.keys
 
     print("MineAgent Raw Input Test Client - Interactive Mode")
     print("=" * 50)
 
-    # Connect to action socket
     if not client.connect():
         return
 
-    # Optionally connect to observation socket
     print("\nDo you want to monitor observations? (y/n): ", end="")
     try:
         if input().lower().startswith("y"):
@@ -688,7 +404,6 @@ def run_interactive_mode():
                 if not command_line:
                     continue
 
-                # Handle special meta commands
                 if command_line.lower() in ["quit", "q"]:
                     break
                 elif command_line.lower() == "status":
@@ -704,37 +419,30 @@ def run_interactive_mode():
                     )
                     continue
                 elif command_line.lower() == "clear":
-                    print("\033[2J\033[H")  # Clear screen
+                    print("\033[2J\033[H")
                     continue
                 elif command_line.lower() == "test":
                     run_test_sequence(client)
                     continue
 
-                # Parse and send command
                 raw_input = parse_command(command_line, held_keys, held_state)
                 if raw_input is not None:
-                    # Handle special 'say' command (multi-step)
                     if raw_input.text.startswith("__SAY__"):
-                        message = raw_input.text[7:]  # Remove __SAY__ prefix
+                        message = raw_input.text[7:]
                         print(f"  Opening chat and typing: {message}")
 
-                        # Step 1: Press T to open chat
                         client.send_raw_input(RawInput(key_codes=[GLFW.KEY_T]))
-                        time.sleep(0.15)  # Wait for chat to open
+                        time.sleep(0.15)
 
-                        # Step 2: Release T
                         client.send_raw_input(RawInput())
                         time.sleep(0.05)
 
-                        # Step 3: Type the message
                         client.send_raw_input(RawInput(text=message))
                         time.sleep(0.05)
 
-                        # Step 4: Press Enter to send
                         client.send_raw_input(RawInput(key_codes=[GLFW.KEY_ENTER]))
                         time.sleep(0.05)
 
-                        # Step 5: Release Enter
                         client.send_raw_input(RawInput())
                     else:
                         client.send_raw_input(raw_input)
@@ -748,7 +456,6 @@ def run_interactive_mode():
     except KeyboardInterrupt:
         print("\nInterrupted by user")
     finally:
-        # Send release all before disconnect
         client.send_raw_input(RawInput())
         client.disconnect()
         observation_client.disconnect()
@@ -797,7 +504,7 @@ def run_automated_test():
     except KeyboardInterrupt:
         print("\nTest interrupted by user")
     finally:
-        client.send_raw_input(RawInput())  # Release all
+        client.send_raw_input(RawInput())
         client.disconnect()
 
 
