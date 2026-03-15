@@ -1,26 +1,28 @@
 import pytest
 import torch
 
+from mineagent.affector.affector import AffectorOutput
 from mineagent.reasoning.dynamics import ForwardDynamics, InverseDynamics
+from mineagent.client.protocol import NUM_KEYS
 
-from tests.helper import ACTION_SPACE
 
-
-ACTION_DIM = 10
 EMBED_DIM = 64
+BATCH = 32
+ACTION_DIM = NUM_KEYS + 3 + 3 + 2  # keys + dx/dy/scroll + 3 buttons + 2 focus
+
 FORWARD_DYNAMICS_EXPECTED_PARAMS = ((EMBED_DIM + ACTION_DIM + 1) * 512) + (
     (512 + 1) * EMBED_DIM
 )
+
+# InverseDynamics wraps a LinearAffector with input dim = EMBED_DIM*2
+_ID = EMBED_DIM * 2
 INVERSE_DYNAMICS_EXPECTED_PARAMS = (
-    ((EMBED_DIM * 2 + 1) * 3)
-    + ((EMBED_DIM * 2 + 1) * 3)
-    + ((EMBED_DIM * 2 + 1) * 4)
-    + ((EMBED_DIM * 2 + 1) * 25)
-    + ((EMBED_DIM * 2 + 1) * 25)
-    + ((EMBED_DIM * 2 + 1) * 8)
-    + ((EMBED_DIM * 2 + 1) * 244)
-    + ((EMBED_DIM * 2 + 1) * 36)
-    + (((EMBED_DIM * 2 + 1) * 2) * 2)
+    (_ID + 1) * NUM_KEYS  # key_head
+    + 2 * (_ID + 1) * 1  # mouse_dx mean+logstd
+    + 2 * (_ID + 1) * 1  # mouse_dy mean+logstd
+    + (_ID + 1) * 3  # mouse_button_head
+    + 2 * (_ID + 1) * 1  # scroll mean+logstd
+    + 2 * (_ID + 1) * 2  # focus means+logstds
 )
 
 
@@ -30,10 +32,10 @@ def forward_dynamics_module():
 
 
 def test_forward_dynamics_forward(forward_dynamics_module):
-    input_obs_tensor = torch.randn((32, EMBED_DIM))
-    input_act_tensor = torch.randn((32, ACTION_DIM))
+    input_obs_tensor = torch.randn((BATCH, EMBED_DIM))
+    input_act_tensor = torch.randn((BATCH, ACTION_DIM))
     out = forward_dynamics_module(input_obs_tensor, input_act_tensor)
-    assert out.shape == (32, EMBED_DIM)
+    assert out.shape == (BATCH, EMBED_DIM)
 
 
 def test_forward_dynamics_params(forward_dynamics_module):
@@ -43,26 +45,19 @@ def test_forward_dynamics_params(forward_dynamics_module):
 
 @pytest.fixture
 def inverse_dynamics_module():
-    return InverseDynamics(embed_dim=EMBED_DIM, action_space=ACTION_SPACE)
+    return InverseDynamics(embed_dim=EMBED_DIM)
 
 
 def test_inverse_dynamics_inverse(inverse_dynamics_module):
-    input_obs_tensor = torch.randn((32, EMBED_DIM))
-    input_next_obs_tensor = torch.randn((32, EMBED_DIM))
+    input_obs_tensor = torch.randn((BATCH, EMBED_DIM))
+    input_next_obs_tensor = torch.randn((BATCH, EMBED_DIM))
     out = inverse_dynamics_module(input_obs_tensor, input_next_obs_tensor)
-    # MineDojo environment action distributions
-    assert out[0].shape == (32, ACTION_SPACE.nvec[0])
-    assert out[1].shape == (32, ACTION_SPACE.nvec[1])
-    assert out[2].shape == (32, ACTION_SPACE.nvec[2])
-    assert out[3].shape == (32, ACTION_SPACE.nvec[3])
-    assert out[4].shape == (32, ACTION_SPACE.nvec[4])
-    assert out[5].shape == (32, ACTION_SPACE.nvec[5])
-    assert out[6].shape == (32, ACTION_SPACE.nvec[6])
-    assert out[7].shape == (32, ACTION_SPACE.nvec[7])
 
-    # Region-of-interest (ROI) action distributions (mean, std) for (x, y) coordinates
-    assert out[8].shape == (32, 2)
-    assert out[9].shape == (32, 2)
+    assert isinstance(out, AffectorOutput)
+    assert out.key_logits.shape == (BATCH, NUM_KEYS)
+    assert out.mouse_dx_mean.shape == (BATCH,)
+    assert out.mouse_button_logits.shape == (BATCH, 3)
+    assert out.focus_means.shape == (BATCH, 2)
 
 
 def test_inverse_dynamics_params(inverse_dynamics_module):

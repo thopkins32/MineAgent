@@ -6,7 +6,13 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from .client import AsyncMinecraftClient, ConnectionConfig, RawInput
+from .client import (
+    AsyncMinecraftClient,
+    ConnectionConfig,
+    RawInput,
+    action_to_raw_input,
+    make_action_space,
+)
 
 
 @dataclass
@@ -51,7 +57,7 @@ class MinecraftEnv(gym.Env):
             dtype=np.uint8,
         )
 
-        self.action_space = spaces.Discrete(1)
+        self.action_space = make_action_space()
 
         self._step_count = 0
         self._last_reward: float = 0.0
@@ -90,7 +96,12 @@ class MinecraftEnv(gym.Env):
 
         return frame, {"step_count": self._step_count, "reward": self._last_reward}
 
-    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+    def step(
+        self, action: dict[str, np.ndarray]
+    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        raw_input = action_to_raw_input(action)
+        self._run_async(self._client.send_action(raw_input))
+
         obs = self._run_async(self._client.receive_observation())
 
         if obs is not None:

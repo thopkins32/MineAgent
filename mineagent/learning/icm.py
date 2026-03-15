@@ -139,23 +139,42 @@ class ICM:
             sample.next_features,
             sample.actions,
         )
-        actions_pred = self.inverse_dynamics(feat, next_feat)
-        return (
-            F.nll_loss(torch.log(actions_pred[0]), actions[:, 0])
-            + F.nll_loss(torch.log(actions_pred[1]), actions[:, 1])
-            + F.nll_loss(torch.log(actions_pred[2]), actions[:, 2])
-            + F.nll_loss(torch.log(actions_pred[3]), actions[:, 3])
-            + F.nll_loss(torch.log(actions_pred[4]), actions[:, 4])
-            + F.nll_loss(torch.log(actions_pred[5]), actions[:, 5])
-            + F.nll_loss(torch.log(actions_pred[6]), actions[:, 6])
-            + F.nll_loss(torch.log(actions_pred[7]), actions[:, 7])
-            + F.gaussian_nll_loss(
-                actions_pred[8][:, 0], actions[:, 8], actions_pred[9][:, 0] ** 2
-            )
-            + F.gaussian_nll_loss(
-                actions_pred[8][:, 1], actions[:, 9], actions_pred[9][:, 1] ** 2
-            )
+        pred = self.inverse_dynamics(feat, next_feat)
+        num_keys = pred.key_logits.shape[-1]
+
+        # Binary cross-entropy for keys
+        loss = F.binary_cross_entropy_with_logits(
+            pred.key_logits, actions[:, :num_keys]
         )
+
+        col = num_keys
+
+        # Gaussian NLL for mouse dx, dy, scroll
+        loss = loss + F.gaussian_nll_loss(
+            pred.mouse_dx_mean, actions[:, col], pred.mouse_dx_std**2
+        )
+        col += 1
+        loss = loss + F.gaussian_nll_loss(
+            pred.mouse_dy_mean, actions[:, col], pred.mouse_dy_std**2
+        )
+        col += 1
+        loss = loss + F.gaussian_nll_loss(
+            pred.scroll_mean, actions[:, col], pred.scroll_std**2
+        )
+        col += 1
+
+        # Binary cross-entropy for mouse buttons
+        loss = loss + F.binary_cross_entropy_with_logits(
+            pred.mouse_button_logits, actions[:, col : col + 3]
+        )
+        col += 3
+
+        # Gaussian NLL for focus
+        loss = loss + F.gaussian_nll_loss(
+            pred.focus_means, actions[:, col : col + 2], pred.focus_stds**2
+        )
+
+        return loss
 
     def _update_inverse_dynamics(self, data: ICMSample) -> None:
         self.inverse_dynamics.train()

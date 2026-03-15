@@ -186,7 +186,9 @@ class PPO:
         # Cannot use the last values here since we don't have the associated reward yet
         features = torch.stack(list(data.features_buffer)[:-1])
         actions = torch.stack(list(data.actions_buffer)[:-1])
-        log_probabilities = torch.stack(list(data.log_probs_buffer)[:-1])
+        # Sum per-component log probs to get joint log prob per timestep
+        raw_logp = torch.stack(list(data.log_probs_buffer)[:-1])
+        log_probabilities = raw_logp.sum(dim=-1) if raw_logp.dim() > 1 else raw_logp
         # Cannot use the first reward value since we no longer have the associated feature
         # The reward for a_t is at r_{t+1}
         env_rewards = torch.tensor(list(data.rewards_buffer)[1:])

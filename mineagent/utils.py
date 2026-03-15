@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from datetime import datetime
 import logging
 from math import floor
+from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy  # type: ignore
@@ -20,6 +23,9 @@ from .monitoring.event import (
 from .monitoring.event_bus import get_event_bus
 from .monitoring.callbacks.tensorboard import TensorboardWriter
 from .config import TensorboardConfig
+
+if TYPE_CHECKING:
+    from .affector.affector import AffectorOutput
 
 
 def compute_output_shape(input_shape, kernel_size, stride):
@@ -115,188 +121,129 @@ def statistics(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.mean(x), torch.std(x)
 
 
-def sample_multinomial(
-    dist: torch.Tensor, sample_dtype=torch.long
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Returns a sample and its log probability for a multinomial distribution"""
-    sample = torch.multinomial(dist, 1)  # Shape: (batch_size, 1)
-    batch_indices = torch.arange(dist.size(0)).unsqueeze(1)
-    return sample.to(sample_dtype), dist[batch_indices, sample].log()
-
-
-def sample_guassian(
-    mean: torch.Tensor, std: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Returns a sample and its log probability for a Guassian distribution"""
-    dist = torch.distributions.Normal(mean, std)
-    sample = dist.rsample()  # Use rsample() to maintain gradients
-    return sample.unsqueeze(1), dist.log_prob(sample).unsqueeze(1)
-
-
 def sample_action(
-    action_dists: tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ],
+    output: AffectorOutput,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Samples actions from the various distributions and combines them into an action tensor.
-    Outputs the action tensor and a logp tensor showing the log probability of taking that action.
+    Sample from the distribution parameters in an AffectorOutput.
 
-    Parameters
-    ----------
-    action_dists : Tuple
-        List of distributions to sample from
+    The returned action tensor has shape ``(batch, NUM_KEYS + 3 + 3 + 2)``
+    laid out as:
+        [key_0 .. key_N | mouse_dx | mouse_dy | scroll |
+         mb_0 mb_1 mb_2 | focus_x focus_y]
 
     Returns
     -------
-    torch.Tensor
-        Action tensor representing the items sampled from the various distributions
-    torch.Tensor
-        Log probabilities of sampling the corresponding action. To get the joint log-probability of the
-        action, you can `.sum()` this tensor.
+    action : torch.Tensor
+        Sampled action vector.
+    logp_action : torch.Tensor
+        Per-component log probabilities (same shape as action).
     """
-    assert len(action_dists[0].shape) == 2
-    # Initialize action and log buffer
-    batch_size = action_dists[0].size(0)
-    batch_indices = torch.arange(batch_size).unsqueeze(1)
-    action = torch.zeros((batch_size, 10), dtype=torch.float)
-    logp_action = torch.zeros((batch_size, 10), dtype=torch.float)
+    num_keys = output.key_logits.shape[-1]
+    batch_size = output.key_logits.shape[0]
+    action_dim = num_keys + 3 + 3 + 2  # keys + (dx,dy,scroll) + 3 buttons + 2 focus
 
-    action[batch_indices, 0], logp_action[batch_indices, 0] = sample_multinomial(
-        action_dists[0][:], torch.float
-    )
-    action[batch_indices, 1], logp_action[batch_indices, 1] = sample_multinomial(
-        action_dists[1][:], torch.float
-    )
-    action[batch_indices, 2], logp_action[batch_indices, 2] = sample_multinomial(
-        action_dists[2][:], torch.float
-    )
-    action[batch_indices, 3], logp_action[batch_indices, 3] = sample_multinomial(
-        action_dists[3][:], torch.float
-    )
-    action[batch_indices, 4], logp_action[batch_indices, 4] = sample_multinomial(
-        action_dists[4][:], torch.float
-    )
-    action[batch_indices, 5], logp_action[batch_indices, 5] = sample_multinomial(
-        action_dists[5][:], torch.float
-    )
-    action[batch_indices, 6], logp_action[batch_indices, 6] = sample_multinomial(
-        action_dists[6][:], torch.float
-    )
-    action[batch_indices, 7], logp_action[batch_indices, 7] = sample_multinomial(
-        action_dists[7][:], torch.float
-    )
-    action[batch_indices, 8], logp_action[batch_indices, 8] = sample_guassian(
-        action_dists[8][:, 0], action_dists[9][:, 0]
-    )
-    action[batch_indices, 9], logp_action[batch_indices, 9] = sample_guassian(
-        action_dists[8][:, 1], action_dists[9][:, 1]
-    )
+    action = torch.zeros(batch_size, action_dim, dtype=torch.float)
+    logp = torch.zeros(batch_size, action_dim, dtype=torch.float)
 
-    return action, logp_action
+    # --- Keys (independent Bernoulli) ---
+    key_dist = torch.distributions.Bernoulli(logits=output.key_logits)
+    key_sample = key_dist.sample()
+    action[:, :num_keys] = key_sample
+    logp[:, :num_keys] = key_dist.log_prob(key_sample)
+
+    col = num_keys
+
+    # --- Mouse dx ---
+    dx_dist = torch.distributions.Normal(output.mouse_dx_mean, output.mouse_dx_std)
+    dx_sample = dx_dist.rsample()
+    action[:, col] = dx_sample
+    logp[:, col] = dx_dist.log_prob(dx_sample)
+    col += 1
+
+    # --- Mouse dy ---
+    dy_dist = torch.distributions.Normal(output.mouse_dy_mean, output.mouse_dy_std)
+    dy_sample = dy_dist.rsample()
+    action[:, col] = dy_sample
+    logp[:, col] = dy_dist.log_prob(dy_sample)
+    col += 1
+
+    # --- Scroll ---
+    scroll_dist = torch.distributions.Normal(output.scroll_mean, output.scroll_std)
+    scroll_sample = scroll_dist.rsample()
+    action[:, col] = scroll_sample
+    logp[:, col] = scroll_dist.log_prob(scroll_sample)
+    col += 1
+
+    # --- Mouse buttons (independent Bernoulli) ---
+    mb_dist = torch.distributions.Bernoulli(logits=output.mouse_button_logits)
+    mb_sample = mb_dist.sample()
+    action[:, col : col + 3] = mb_sample
+    logp[:, col : col + 3] = mb_dist.log_prob(mb_sample)
+    col += 3
+
+    # --- Focus / ROI ---
+    focus_dist = torch.distributions.Normal(output.focus_means, output.focus_stds)
+    focus_sample = focus_dist.rsample()
+    action[:, col : col + 2] = focus_sample
+    logp[:, col : col + 2] = focus_dist.log_prob(focus_sample)
+
+    return action, logp
 
 
 def joint_logp_action(
-    action_dists: tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ],
+    output: AffectorOutput,
     actions_taken: torch.Tensor,
 ) -> torch.Tensor:
     """
-    Outputs the log probability of a sample as if the sample was taken
-    from the distribution already.
+    Compute the joint log-probability of *actions_taken* under the
+    distributions described by *output*.
 
     Parameters
     ----------
-    action_dists : Tuple
-        List of distributions to sample from
+    output : AffectorOutput
+        Distribution parameters from the affector.
     actions_taken : torch.Tensor
-        Samples produced already
+        Previously sampled action tensor (same layout as ``sample_action``).
 
     Returns
     -------
     torch.Tensor
-        Join log-probability of taking the action given the distributions of each component
+        Scalar (per batch element) joint log-probability.
     """
-    long_actions_taken = actions_taken.long()
-    joint_logp = (  # longitudinal movement
-        action_dists[0]
-        .gather(1, long_actions_taken[:, 0].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    # Avoid += here as it is an in-place operation (which is bad for autograd)
-    joint_logp = joint_logp + (  # lateral movement
-        action_dists[1]
-        .gather(1, long_actions_taken[:, 1].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # vertical movement
-        action_dists[2]
-        .gather(1, long_actions_taken[:, 2].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # pitch movement
-        action_dists[3]
-        .gather(1, long_actions_taken[:, 3].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # yaw movement
-        action_dists[4]
-        .gather(1, long_actions_taken[:, 4].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # functional actions
-        action_dists[5]
-        .gather(1, long_actions_taken[:, 5].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # crafting actions
-        action_dists[6]
-        .gather(1, long_actions_taken[:, 6].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    joint_logp = joint_logp + (  # inventory actions
-        action_dists[7]
-        .gather(1, long_actions_taken[:, 7].unsqueeze(-1))
-        .squeeze()
-        .log()
-    )
-    # Focus actions
-    x_roi_dist = torch.distributions.Normal(
-        action_dists[8][:, 0], action_dists[9][:, 0]
-    )
-    joint_logp = joint_logp + x_roi_dist.log_prob(actions_taken[:, 8])
-    y_roi_dist = torch.distributions.Normal(
-        action_dists[8][:, 1], action_dists[9][:, 1]
-    )
-    joint_logp = joint_logp + y_roi_dist.log_prob(actions_taken[:, 9])
+    num_keys = output.key_logits.shape[-1]
 
-    return joint_logp
+    # Keys
+    key_dist = torch.distributions.Bernoulli(logits=output.key_logits)
+    joint = key_dist.log_prob(actions_taken[:, :num_keys]).sum(dim=-1)
+
+    col = num_keys
+
+    # Mouse dx
+    dx_dist = torch.distributions.Normal(output.mouse_dx_mean, output.mouse_dx_std)
+    joint = joint + dx_dist.log_prob(actions_taken[:, col])
+    col += 1
+
+    # Mouse dy
+    dy_dist = torch.distributions.Normal(output.mouse_dy_mean, output.mouse_dy_std)
+    joint = joint + dy_dist.log_prob(actions_taken[:, col])
+    col += 1
+
+    # Scroll
+    scroll_dist = torch.distributions.Normal(output.scroll_mean, output.scroll_std)
+    joint = joint + scroll_dist.log_prob(actions_taken[:, col])
+    col += 1
+
+    # Mouse buttons
+    mb_dist = torch.distributions.Bernoulli(logits=output.mouse_button_logits)
+    joint = joint + mb_dist.log_prob(actions_taken[:, col : col + 3]).sum(dim=-1)
+    col += 3
+
+    # Focus
+    focus_dist = torch.distributions.Normal(output.focus_means, output.focus_stds)
+    joint = joint + focus_dist.log_prob(actions_taken[:, col : col + 2]).sum(dim=-1)
+
+    return joint
 
 
 def add_forward_hooks(module: nn.Module, prefix: str = "") -> list[RemovableHandle]:

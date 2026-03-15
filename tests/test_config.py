@@ -16,7 +16,7 @@ from mineagent.config import (
     Config,
     MonitoringConfig,
 )
-from tests.helper import ACTION_SPACE, CONFIG_PATH
+from tests.helper import CONFIG_PATH
 
 
 def test_ppo_config():
@@ -27,7 +27,7 @@ def test_ppo_config():
 
     # Parsing
     config = parse_config(CONFIG_PATH)
-    agent = AgentV1(config.agent, ACTION_SPACE)
+    agent = AgentV1(config.agent)
 
     # Comparison
     assert (
