@@ -5,7 +5,7 @@ import numpy as np
 import gymnasium
 from gymnasium import spaces
 
-from mineagent.client.protocol import make_action_space, NUM_KEYS
+from mineagent.client.protocol import make_action_space
 
 PROJECT_ROOT = os.path.abspath(os.path.join(__file__, "..", ".."))
 CONFIG_PATH = os.path.join(PROJECT_ROOT, "config_templates", "config.yaml")

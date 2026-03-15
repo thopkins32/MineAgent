@@ -17,12 +17,12 @@ FORWARD_DYNAMICS_EXPECTED_PARAMS = ((EMBED_DIM + ACTION_DIM + 1) * 512) + (
 # InverseDynamics wraps a LinearAffector with input dim = EMBED_DIM*2
 _ID = EMBED_DIM * 2
 INVERSE_DYNAMICS_EXPECTED_PARAMS = (
-    (_ID + 1) * NUM_KEYS          # key_head
-    + 2 * (_ID + 1) * 1           # mouse_dx mean+logstd
-    + 2 * (_ID + 1) * 1           # mouse_dy mean+logstd
-    + (_ID + 1) * 3               # mouse_button_head
-    + 2 * (_ID + 1) * 1           # scroll mean+logstd
-    + 2 * (_ID + 1) * 2           # focus means+logstds
+    (_ID + 1) * NUM_KEYS  # key_head
+    + 2 * (_ID + 1) * 1  # mouse_dx mean+logstd
+    + 2 * (_ID + 1) * 1  # mouse_dy mean+logstd
+    + (_ID + 1) * 3  # mouse_button_head
+    + 2 * (_ID + 1) * 1  # scroll mean+logstd
+    + 2 * (_ID + 1) * 2  # focus means+logstds
 )
 
 

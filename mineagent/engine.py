@@ -4,7 +4,6 @@ import torch
 
 from .agent.agent import AgentV1
 from .env import MinecraftEnv, MinecraftEnvConfig
-from .client import ConnectionConfig
 from .config import get_config, MonitoringConfig
 from .monitoring.event_bus import get_event_bus
 from .monitoring.event import Start, Stop, EnvReset, EnvStep

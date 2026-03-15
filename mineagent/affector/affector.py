@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from ..client.protocol import NUM_KEYS, MOUSE_DX_RANGE, MOUSE_DY_RANGE, SCROLL_RANGE
+from ..client.protocol import NUM_KEYS
 from ..utils import add_forward_hooks
 
 

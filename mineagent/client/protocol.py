@@ -156,59 +156,59 @@ COMMAND_TO_KEY: dict[str, int] = {
 # Index in this list == index in the MultiBinary vector.
 KEY_LIST: list[int] = [
     # Movement
-    GLFW.KEY_W,              # 0: forward
-    GLFW.KEY_S,              # 1: back
-    GLFW.KEY_A,              # 2: strafe left
-    GLFW.KEY_D,              # 3: strafe right
-    GLFW.KEY_SPACE,          # 4: jump
-    GLFW.KEY_LEFT_SHIFT,     # 5: sneak
-    GLFW.KEY_LEFT_CONTROL,   # 6: sprint
+    GLFW.KEY_W,  # 0: forward
+    GLFW.KEY_S,  # 1: back
+    GLFW.KEY_A,  # 2: strafe left
+    GLFW.KEY_D,  # 3: strafe right
+    GLFW.KEY_SPACE,  # 4: jump
+    GLFW.KEY_LEFT_SHIFT,  # 5: sneak
+    GLFW.KEY_LEFT_CONTROL,  # 6: sprint
     # Interaction
-    GLFW.KEY_E,              # 7: inventory
-    GLFW.KEY_Q,              # 8: drop
-    GLFW.KEY_F,              # 9: swap offhand
+    GLFW.KEY_E,  # 7: inventory
+    GLFW.KEY_Q,  # 8: drop
+    GLFW.KEY_F,  # 9: swap offhand
     # Hotbar
-    GLFW.KEY_1,              # 10
-    GLFW.KEY_2,              # 11
-    GLFW.KEY_3,              # 12
-    GLFW.KEY_4,              # 13
-    GLFW.KEY_5,              # 14
-    GLFW.KEY_6,              # 15
-    GLFW.KEY_7,              # 16
-    GLFW.KEY_8,              # 17
-    GLFW.KEY_9,              # 18
+    GLFW.KEY_1,  # 10
+    GLFW.KEY_2,  # 11
+    GLFW.KEY_3,  # 12
+    GLFW.KEY_4,  # 13
+    GLFW.KEY_5,  # 14
+    GLFW.KEY_6,  # 15
+    GLFW.KEY_7,  # 16
+    GLFW.KEY_8,  # 17
+    GLFW.KEY_9,  # 18
     # UI / Menu
-    GLFW.KEY_ESCAPE,         # 19
-    GLFW.KEY_ENTER,          # 20
-    GLFW.KEY_TAB,            # 21
-    GLFW.KEY_BACKSPACE,      # 22
+    GLFW.KEY_ESCAPE,  # 19
+    GLFW.KEY_ENTER,  # 20
+    GLFW.KEY_TAB,  # 21
+    GLFW.KEY_BACKSPACE,  # 22
     # Chat
-    GLFW.KEY_T,              # 23: open chat
-    GLFW.KEY_SLASH,          # 24: open command
+    GLFW.KEY_T,  # 23: open chat
+    GLFW.KEY_SLASH,  # 24: open command
     # Letters (for typing in chat/signs/etc.)
-    GLFW.KEY_B,              # 25
-    GLFW.KEY_C,              # 26
-    GLFW.KEY_G,              # 27
-    GLFW.KEY_H,              # 28
-    GLFW.KEY_I,              # 29
-    GLFW.KEY_J,              # 30
-    GLFW.KEY_K,              # 31
-    GLFW.KEY_L,              # 32
-    GLFW.KEY_M,              # 33
-    GLFW.KEY_N,              # 34
-    GLFW.KEY_O,              # 35
-    GLFW.KEY_P,              # 36
-    GLFW.KEY_R,              # 37
-    GLFW.KEY_U,              # 38
-    GLFW.KEY_V,              # 39
-    GLFW.KEY_X,              # 40
-    GLFW.KEY_Y,              # 41
-    GLFW.KEY_Z,              # 42
+    GLFW.KEY_B,  # 25
+    GLFW.KEY_C,  # 26
+    GLFW.KEY_G,  # 27
+    GLFW.KEY_H,  # 28
+    GLFW.KEY_I,  # 29
+    GLFW.KEY_J,  # 30
+    GLFW.KEY_K,  # 31
+    GLFW.KEY_L,  # 32
+    GLFW.KEY_M,  # 33
+    GLFW.KEY_N,  # 34
+    GLFW.KEY_O,  # 35
+    GLFW.KEY_P,  # 36
+    GLFW.KEY_R,  # 37
+    GLFW.KEY_U,  # 38
+    GLFW.KEY_V,  # 39
+    GLFW.KEY_X,  # 40
+    GLFW.KEY_Y,  # 41
+    GLFW.KEY_Z,  # 42
     # Debug
-    GLFW.KEY_F1,             # 43
-    GLFW.KEY_F2,             # 44
-    GLFW.KEY_F3,             # 45
-    GLFW.KEY_F5,             # 46
+    GLFW.KEY_F1,  # 43
+    GLFW.KEY_F2,  # 44
+    GLFW.KEY_F3,  # 45
+    GLFW.KEY_F5,  # 46
 ]
 
 NUM_KEYS: int = len(KEY_LIST)
