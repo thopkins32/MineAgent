@@ -47,6 +47,8 @@ class PPOConfig:
         Discount factor for calculating rewards
     gae_discount_factor : float, optional
         Discount factor for Generalized Advantage Estimation
+    focus_loss_coeff : float, optional
+        Coefficient for the separate REINFORCE loss on the focus/ROI head
     """
 
     clip_ratio: float = 0.2
@@ -57,6 +59,7 @@ class PPOConfig:
     train_critic_iters: int = 80
     discount_factor: float = 0.99
     gae_discount_factor: float = 0.97
+    focus_loss_coeff: float = 0.01
 
 
 @dataclass
