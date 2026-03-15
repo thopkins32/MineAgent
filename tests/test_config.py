@@ -27,7 +27,7 @@ def test_ppo_config():
 
     # Parsing
     config = parse_config(CONFIG_PATH)
-    agent = AgentV1(config.agent, ACTION_SPACE)
+    agent = AgentV1(config.agent)
 
     # Comparison
     assert (

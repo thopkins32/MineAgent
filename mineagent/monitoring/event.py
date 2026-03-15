@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import torch
 
@@ -48,7 +49,7 @@ class EnvStep(Event):
     """
 
     observation: torch.Tensor
-    action: torch.Tensor
+    action: Any
     next_observation: torch.Tensor
     reward: float
 
@@ -59,7 +60,7 @@ class EnvReset(Event):
     After the environment has been reset.
     """
 
-    observation: torch.Tensor
+    observation: Any
 
 
 @dataclass
@@ -69,7 +70,7 @@ class Action(Event):
     """
 
     visual_features: torch.Tensor
-    action_distribution: torch.Tensor
+    action_distribution: Any
     action: torch.Tensor
     logp_action: torch.Tensor
     value: torch.Tensor

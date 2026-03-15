@@ -39,8 +39,10 @@ class TensorboardWriter:
             "Action/intrinsic_reward", event.intrinsic_reward, global_step=step
         )
 
-        # Log action distribution
-        if event.action_distribution is not None:
+        # Log action distribution (if it's a tensor; skip dataclass outputs)
+        if event.action_distribution is not None and isinstance(
+            event.action_distribution, torch.Tensor
+        ):
             self.writer.add_histogram(
                 "Action/distribution", event.action_distribution, global_step=step
             )
@@ -76,8 +78,8 @@ class TensorboardWriter:
                 dataformats="CHW",
             )
 
-        # Add histogram for action
-        if event.action is not None:
+        # Add histogram for action (only if it's a tensor)
+        if event.action is not None and isinstance(event.action, torch.Tensor):
             self.writer.add_histogram("EnvStep/action", event.action, global_step=None)
 
     def add_env_reset(self, event: EnvReset) -> None:

@@ -152,6 +152,69 @@ COMMAND_TO_KEY: dict[str, int] = {
     "command": GLFW.KEY_SLASH,
 }
 
+# Canonical ordered list of GLFW key codes included in the action space.
+# Index in this list == index in the MultiBinary vector.
+KEY_LIST: list[int] = [
+    # Movement
+    GLFW.KEY_W,              # 0: forward
+    GLFW.KEY_S,              # 1: back
+    GLFW.KEY_A,              # 2: strafe left
+    GLFW.KEY_D,              # 3: strafe right
+    GLFW.KEY_SPACE,          # 4: jump
+    GLFW.KEY_LEFT_SHIFT,     # 5: sneak
+    GLFW.KEY_LEFT_CONTROL,   # 6: sprint
+    # Interaction
+    GLFW.KEY_E,              # 7: inventory
+    GLFW.KEY_Q,              # 8: drop
+    GLFW.KEY_F,              # 9: swap offhand
+    # Hotbar
+    GLFW.KEY_1,              # 10
+    GLFW.KEY_2,              # 11
+    GLFW.KEY_3,              # 12
+    GLFW.KEY_4,              # 13
+    GLFW.KEY_5,              # 14
+    GLFW.KEY_6,              # 15
+    GLFW.KEY_7,              # 16
+    GLFW.KEY_8,              # 17
+    GLFW.KEY_9,              # 18
+    # UI / Menu
+    GLFW.KEY_ESCAPE,         # 19
+    GLFW.KEY_ENTER,          # 20
+    GLFW.KEY_TAB,            # 21
+    GLFW.KEY_BACKSPACE,      # 22
+    # Chat
+    GLFW.KEY_T,              # 23: open chat
+    GLFW.KEY_SLASH,          # 24: open command
+    # Letters (for typing in chat/signs/etc.)
+    GLFW.KEY_B,              # 25
+    GLFW.KEY_C,              # 26
+    GLFW.KEY_G,              # 27
+    GLFW.KEY_H,              # 28
+    GLFW.KEY_I,              # 29
+    GLFW.KEY_J,              # 30
+    GLFW.KEY_K,              # 31
+    GLFW.KEY_L,              # 32
+    GLFW.KEY_M,              # 33
+    GLFW.KEY_N,              # 34
+    GLFW.KEY_O,              # 35
+    GLFW.KEY_P,              # 36
+    GLFW.KEY_R,              # 37
+    GLFW.KEY_U,              # 38
+    GLFW.KEY_V,              # 39
+    GLFW.KEY_X,              # 40
+    GLFW.KEY_Y,              # 41
+    GLFW.KEY_Z,              # 42
+    # Debug
+    GLFW.KEY_F1,             # 43
+    GLFW.KEY_F2,             # 44
+    GLFW.KEY_F3,             # 45
+    GLFW.KEY_F5,             # 46
+]
+
+NUM_KEYS: int = len(KEY_LIST)
+
+KEY_TO_INDEX: dict[int, int] = {code: idx for idx, code in enumerate(KEY_LIST)}
+
 
 @dataclass
 class RawInput:
@@ -276,3 +339,95 @@ def parse_observation(
     frame = np.frombuffer(frame_data, dtype=np.uint8).reshape(height, width, 3)
 
     return Observation(reward=reward, frame=frame)
+
+
+# ---------------------------------------------------------------------------
+# Action space helpers
+# ---------------------------------------------------------------------------
+
+MOUSE_DX_RANGE = (-180.0, 180.0)
+MOUSE_DY_RANGE = (-180.0, 180.0)
+SCROLL_RANGE = (-10.0, 10.0)
+
+
+def make_action_space():
+    """Build the Gymnasium Dict action space that mirrors RawInput."""
+    from gymnasium import spaces
+
+    return spaces.Dict(
+        {
+            "keys": spaces.MultiBinary(NUM_KEYS),
+            "mouse_dx": spaces.Box(*MOUSE_DX_RANGE, shape=(), dtype=np.float32),
+            "mouse_dy": spaces.Box(*MOUSE_DY_RANGE, shape=(), dtype=np.float32),
+            "mouse_buttons": spaces.MultiBinary(3),
+            "scroll_delta": spaces.Box(*SCROLL_RANGE, shape=(), dtype=np.float32),
+        }
+    )
+
+
+def action_to_raw_input(action: dict[str, np.ndarray]) -> RawInput:
+    """
+    Convert a Dict-space action sample into a RawInput for the wire protocol.
+
+    Parameters
+    ----------
+    action : dict[str, np.ndarray]
+        A sample from the action space returned by ``make_action_space()``.
+
+    Returns
+    -------
+    RawInput
+        Ready to serialize with ``to_bytes()`` and send to the Forge mod.
+    """
+    keys_vec = np.asarray(action["keys"], dtype=np.int8).ravel()
+    key_codes = [KEY_LIST[i] for i, pressed in enumerate(keys_vec) if pressed]
+
+    mouse_buttons_vec = np.asarray(action["mouse_buttons"], dtype=np.int8).ravel()
+    mouse_buttons = 0
+    for bit, pressed in enumerate(mouse_buttons_vec):
+        if pressed:
+            mouse_buttons |= 1 << bit
+
+    return RawInput(
+        key_codes=key_codes,
+        mouse_dx=float(action["mouse_dx"]),
+        mouse_dy=float(action["mouse_dy"]),
+        mouse_buttons=mouse_buttons,
+        scroll_delta=float(action["scroll_delta"]),
+    )
+
+
+def raw_input_to_action(raw_input: RawInput) -> dict[str, np.ndarray]:
+    """
+    Convert a RawInput back into a Dict-space action sample.
+
+    Useful for imitation learning or replaying recorded human input.
+
+    Parameters
+    ----------
+    raw_input : RawInput
+        The raw input to convert.
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        A valid sample for the action space returned by ``make_action_space()``.
+    """
+    keys = np.zeros(NUM_KEYS, dtype=np.int8)
+    for code in raw_input.key_codes:
+        idx = KEY_TO_INDEX.get(code)
+        if idx is not None:
+            keys[idx] = 1
+
+    mouse_buttons = np.zeros(3, dtype=np.int8)
+    for bit in range(3):
+        if raw_input.mouse_buttons & (1 << bit):
+            mouse_buttons[bit] = 1
+
+    return {
+        "keys": keys,
+        "mouse_dx": np.float32(raw_input.mouse_dx),
+        "mouse_dy": np.float32(raw_input.mouse_dy),
+        "mouse_buttons": mouse_buttons,
+        "scroll_delta": np.float32(raw_input.scroll_delta),
+    }

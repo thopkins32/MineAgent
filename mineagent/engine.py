@@ -1,16 +1,14 @@
-from typing import cast
 from datetime import datetime
 
 import torch
-import minedojo
-from gymnasium.spaces import MultiDiscrete
 
 from .agent.agent import AgentV1
-from .config import get_config
+from .env import MinecraftEnv, MinecraftEnvConfig
+from .client import ConnectionConfig
+from .config import get_config, MonitoringConfig
 from .monitoring.event_bus import get_event_bus
 from .monitoring.event import Start, Stop, EnvReset, EnvStep
 from .utils import setup_tensorboard
-from .config import MonitoringConfig
 
 
 def setup_monitoring(config: MonitoringConfig) -> None:
@@ -38,18 +36,22 @@ def run() -> None:
 
     event_bus.publish(Start(timestamp=datetime.now()))
 
-    env = minedojo.make(task_id="open-ended", image_size=engine_config.image_size)
-    action_space = cast(MultiDiscrete, env.action_space)
-    agent = AgentV1(config.agent, action_space)
+    env_config = MinecraftEnvConfig(
+        frame_height=engine_config.image_size[0],
+        frame_width=engine_config.image_size[1],
+        max_steps=engine_config.max_steps,
+    )
+    env = MinecraftEnv(env_config=env_config)
+    agent = AgentV1(config.agent)
 
-    obs = env.reset()["rgb"].copy()  # type: ignore[no-untyped-call]
-    event_bus.publish(EnvReset(timestamp=datetime.now(), observation=obs))
-    obs = torch.tensor(obs, dtype=torch.float).unsqueeze(0)
+    frame, info = env.reset()
+    event_bus.publish(EnvReset(timestamp=datetime.now(), observation=frame))
+    obs = torch.tensor(frame, dtype=torch.float).unsqueeze(0)
     total_return = 0.0
     for _ in range(engine_config.max_steps):
-        action = agent.act(obs).squeeze(0)
-        next_obs, reward, _, _ = env.step(action)
-        next_obs = torch.tensor(next_obs["rgb"].copy(), dtype=torch.float).unsqueeze(0)
+        action = agent.act(obs)
+        next_frame, reward, terminated, truncated, info = env.step(action)
+        next_obs = torch.tensor(next_frame, dtype=torch.float).unsqueeze(0)
         event_bus.publish(
             EnvStep(
                 timestamp=datetime.now(),
@@ -61,7 +63,10 @@ def run() -> None:
         )
         total_return += reward
         obs = next_obs
+        if terminated or truncated:
+            break
 
+    env.close()
     event_bus.publish(Stop(timestamp=datetime.now(), total_return=total_return))
 
 
