@@ -28,6 +28,8 @@ class TrajectoryBuffer:
         self.intrinsic_rewards_buffer: deque[float] = deque([], maxlen=max_buffer_size)
         self.values_buffer: deque[float] = deque([], maxlen=max_buffer_size)
         self.log_probs_buffer: deque[torch.Tensor] = deque([], maxlen=max_buffer_size)
+        self.focus_buffer: deque[torch.Tensor] = deque([], maxlen=max_buffer_size)
+        self.focus_logp_buffer: deque[torch.Tensor] = deque([], maxlen=max_buffer_size)
 
     def __len__(self):
         return len(self.features_buffer)
@@ -40,16 +42,18 @@ class TrajectoryBuffer:
         intrinsic_reward: float,
         value: float,
         log_prob: torch.Tensor,
+        focus: torch.Tensor | None = None,
+        focus_logp: torch.Tensor | None = None,
     ) -> None:
         """
-        Append a single time-step to the trajectory. Updates values for the previous time steps.
+        Append a single time-step to the trajectory.
 
         Parameters
         ----------
         visual_features : torch.Tensor
             Features computed by visual perception from the observation of the environment
         action : torch.Tensor
-            Action tensor for the MineDojo environment + the region of interest (x,y) coordinates
+            Environment action tensor (keys, mouse, buttons, scroll -- no focus)
         reward : float
             Reward value from the environment for the previous action
         intrinsic_reward : float
@@ -57,7 +61,11 @@ class TrajectoryBuffer:
         value : float
             Value assigned to the observation by the agent
         log_prob : torch.Tensor
-            Log probability of selecting each sub-action
+            Log probability of selecting each environment sub-action
+        focus : torch.Tensor | None
+            Focus/ROI coordinates (2-dim), stored separately from env action
+        focus_logp : torch.Tensor | None
+            Log probability of the focus coordinates
         """
         self.features_buffer.append(visual_features)
         self.actions_buffer.append(action)
@@ -65,3 +73,7 @@ class TrajectoryBuffer:
         self.intrinsic_rewards_buffer.append(intrinsic_reward)
         self.values_buffer.append(value)
         self.log_probs_buffer.append(log_prob)
+        if focus is not None:
+            self.focus_buffer.append(focus)
+        if focus_logp is not None:
+            self.focus_logp_buffer.append(focus_logp)

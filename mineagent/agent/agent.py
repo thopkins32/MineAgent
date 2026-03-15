@@ -88,8 +88,8 @@ class AgentV1:
     @staticmethod
     def action_tensor_to_env(action: torch.Tensor) -> dict[str, np.ndarray]:
         """
-        Convert the flat action tensor (without the trailing 2 focus dims)
-        into the Dict-space action expected by MinecraftEnv.
+        Convert the flat env action tensor into the Dict-space action
+        expected by MinecraftEnv.
         """
         a = action.squeeze(0)
         keys = (a[:NUM_KEYS] > 0.5).to(torch.int8).numpy()
@@ -115,15 +115,22 @@ class AgentV1:
             visual_features = self.vision(obs, roi_obs)
             affector_output = self.affector(visual_features)
             value = self.critic(visual_features)
-        action, logp_action = sample_action(affector_output)
+        env_action, env_logp, focus_action, focus_logp = sample_action(affector_output)
 
         with torch.no_grad():
             intrinsic_reward = self.icm.intrinsic_reward(
-                self.prev_visual_features, action, visual_features
+                self.prev_visual_features, env_action, visual_features
             )
 
         self.memory.store(
-            visual_features, action, reward, intrinsic_reward, value, logp_action
+            visual_features,
+            env_action,
+            reward,
+            intrinsic_reward,
+            value,
+            env_logp,
+            focus=focus_action,
+            focus_logp=focus_logp,
         )
 
         if len(self.memory) == self.config.max_buffer_size:
@@ -131,9 +138,9 @@ class AgentV1:
             self.icm.update(self.memory)
 
         self.prev_visual_features = visual_features
-        self.roi_action = action[:, -2:].round().long()
+        self.roi_action = focus_action.round().long()
 
-        env_action = self.action_tensor_to_env(action[:, :-2])
+        env_action_dict = self.action_tensor_to_env(env_action)
 
         if self.monitor_actions:
             self.event_bus.publish(
@@ -141,11 +148,11 @@ class AgentV1:
                     timestamp=datetime.now(),
                     visual_features=visual_features,
                     action_distribution=affector_output,
-                    action=action,
-                    logp_action=logp_action,
+                    action=env_action,
+                    logp_action=env_logp,
                     value=value,
                     region_of_interest=roi_obs,
                     intrinsic_reward=intrinsic_reward,
                 )
             )
-        return env_action
+        return env_action_dict

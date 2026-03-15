@@ -123,72 +123,72 @@ def statistics(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 def sample_action(
     output: AffectorOutput,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Sample from the distribution parameters in an AffectorOutput.
 
-    The returned action tensor has shape ``(batch, NUM_KEYS + 3 + 3 + 2)``
-    laid out as:
-        [key_0 .. key_N | mouse_dx | mouse_dy | scroll |
-         mb_0 mb_1 mb_2 | focus_x focus_y]
+    Returns environment actions and focus actions as separate tensors so that
+    PPO/ICM only operate on the environment-affecting components.
 
     Returns
     -------
-    action : torch.Tensor
-        Sampled action vector.
-    logp_action : torch.Tensor
-        Per-component log probabilities (same shape as action).
+    env_action : torch.Tensor
+        Environment action vector ``(batch, NUM_KEYS + 3 + 3)``.
+    env_logp : torch.Tensor
+        Per-component log probabilities for env_action (same shape).
+    focus_action : torch.Tensor
+        Focus/ROI coordinates ``(batch, 2)``.
+    focus_logp : torch.Tensor
+        Per-component log probabilities for focus_action ``(batch, 2)``.
     """
     num_keys = output.key_logits.shape[-1]
     batch_size = output.key_logits.shape[0]
-    action_dim = num_keys + 3 + 3 + 2  # keys + (dx,dy,scroll) + 3 buttons + 2 focus
+    env_dim = num_keys + 3 + 3  # keys + (dx,dy,scroll) + 3 buttons
 
-    action = torch.zeros(batch_size, action_dim, dtype=torch.float)
-    logp = torch.zeros(batch_size, action_dim, dtype=torch.float)
+    env_action = torch.zeros(batch_size, env_dim, dtype=torch.float)
+    env_logp = torch.zeros(batch_size, env_dim, dtype=torch.float)
 
     # --- Keys (independent Bernoulli) ---
     key_dist = torch.distributions.Bernoulli(logits=output.key_logits)
     key_sample = key_dist.sample()
-    action[:, :num_keys] = key_sample
-    logp[:, :num_keys] = key_dist.log_prob(key_sample)
+    env_action[:, :num_keys] = key_sample
+    env_logp[:, :num_keys] = key_dist.log_prob(key_sample)
 
     col = num_keys
 
     # --- Mouse dx ---
     dx_dist = torch.distributions.Normal(output.mouse_dx_mean, output.mouse_dx_std)
     dx_sample = dx_dist.rsample()
-    action[:, col] = dx_sample
-    logp[:, col] = dx_dist.log_prob(dx_sample)
+    env_action[:, col] = dx_sample
+    env_logp[:, col] = dx_dist.log_prob(dx_sample)
     col += 1
 
     # --- Mouse dy ---
     dy_dist = torch.distributions.Normal(output.mouse_dy_mean, output.mouse_dy_std)
     dy_sample = dy_dist.rsample()
-    action[:, col] = dy_sample
-    logp[:, col] = dy_dist.log_prob(dy_sample)
+    env_action[:, col] = dy_sample
+    env_logp[:, col] = dy_dist.log_prob(dy_sample)
     col += 1
 
     # --- Scroll ---
     scroll_dist = torch.distributions.Normal(output.scroll_mean, output.scroll_std)
     scroll_sample = scroll_dist.rsample()
-    action[:, col] = scroll_sample
-    logp[:, col] = scroll_dist.log_prob(scroll_sample)
+    env_action[:, col] = scroll_sample
+    env_logp[:, col] = scroll_dist.log_prob(scroll_sample)
     col += 1
 
     # --- Mouse buttons (independent Bernoulli) ---
     mb_dist = torch.distributions.Bernoulli(logits=output.mouse_button_logits)
     mb_sample = mb_dist.sample()
-    action[:, col : col + 3] = mb_sample
-    logp[:, col : col + 3] = mb_dist.log_prob(mb_sample)
-    col += 3
+    env_action[:, col : col + 3] = mb_sample
+    env_logp[:, col : col + 3] = mb_dist.log_prob(mb_sample)
 
-    # --- Focus / ROI ---
+    # --- Focus / ROI (separate from env action) ---
     focus_dist = torch.distributions.Normal(output.focus_means, output.focus_stds)
     focus_sample = focus_dist.rsample()
-    action[:, col : col + 2] = focus_sample
-    logp[:, col : col + 2] = focus_dist.log_prob(focus_sample)
+    focus_logp = focus_dist.log_prob(focus_sample)
 
-    return action, logp
+    return env_action, env_logp, focus_sample, focus_logp
 
 
 def joint_logp_action(
@@ -196,15 +196,16 @@ def joint_logp_action(
     actions_taken: torch.Tensor,
 ) -> torch.Tensor:
     """
-    Compute the joint log-probability of *actions_taken* under the
-    distributions described by *output*.
+    Compute the joint log-probability of environment actions only.
+
+    Focus/ROI actions are excluded -- they get their own loss term.
 
     Parameters
     ----------
     output : AffectorOutput
         Distribution parameters from the affector.
     actions_taken : torch.Tensor
-        Previously sampled action tensor (same layout as ``sample_action``).
+        Environment action tensor ``(batch, NUM_KEYS + 3 + 3)``.
 
     Returns
     -------
@@ -237,11 +238,6 @@ def joint_logp_action(
     # Mouse buttons
     mb_dist = torch.distributions.Bernoulli(logits=output.mouse_button_logits)
     joint = joint + mb_dist.log_prob(actions_taken[:, col : col + 3]).sum(dim=-1)
-    col += 3
-
-    # Focus
-    focus_dist = torch.distributions.Normal(output.focus_means, output.focus_stds)
-    joint = joint + focus_dist.log_prob(actions_taken[:, col : col + 2]).sum(dim=-1)
 
     return joint
 

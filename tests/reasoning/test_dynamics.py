@@ -8,7 +8,7 @@ from mineagent.client.protocol import NUM_KEYS
 
 EMBED_DIM = 64
 BATCH = 32
-ACTION_DIM = NUM_KEYS + 3 + 3 + 2  # keys + dx/dy/scroll + 3 buttons + 2 focus
+ACTION_DIM = NUM_KEYS + 3 + 3  # keys + dx/dy/scroll + 3 buttons (no focus)
 
 FORWARD_DYNAMICS_EXPECTED_PARAMS = ((EMBED_DIM + ACTION_DIM + 1) * 512) + (
     (512 + 1) * EMBED_DIM
