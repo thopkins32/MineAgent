@@ -47,9 +47,11 @@ def run() -> None:
     event_bus.publish(EnvReset(timestamp=datetime.now(), observation=frame))
     obs = torch.tensor(frame, dtype=torch.float).unsqueeze(0)
     total_return = 0.0
+    prev_env_reward = 0.0
     for _ in range(engine_config.max_steps):
-        action = agent.act(obs)
+        action = agent.act(obs, reward=prev_env_reward)
         next_frame, reward, terminated, truncated, info = env.step(action)
+        prev_env_reward = float(reward)
         next_obs = torch.tensor(next_frame, dtype=torch.float).unsqueeze(0)
         event_bus.publish(
             EnvStep(

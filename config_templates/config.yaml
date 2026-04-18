@@ -17,6 +17,9 @@ agent:
     train_critic_iters: 80 # Number of iterations to train critic
     discount_factor: 0.99
     gae_discount_factor: 0.97
+    # PPO reward mix: r = extrinsic_reward_coeff * r_env + intrinsic_reward_coeff * r_icm
+    extrinsic_reward_coeff: 1.0
+    intrinsic_reward_coeff: 1.0
   icm:
     scaling_factor: 1.0
     train_forward_dynamics_iters: 80
