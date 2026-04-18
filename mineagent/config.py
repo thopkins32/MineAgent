@@ -49,6 +49,10 @@ class PPOConfig:
         Discount factor for Generalized Advantage Estimation
     focus_loss_coeff : float, optional
         Coefficient for the separate REINFORCE loss on the focus/ROI head
+    extrinsic_reward_coeff : float, optional
+        Weight λ_ext on environment reward in PPO: r = λ_ext * r_env + λ_icm * r_intrinsic
+    intrinsic_reward_coeff : float, optional
+        Weight λ_icm on ICM intrinsic reward in PPO (independent of ICMConfig.scaling_factor)
     """
 
     clip_ratio: float = 0.2
@@ -60,6 +64,8 @@ class PPOConfig:
     discount_factor: float = 0.99
     gae_discount_factor: float = 0.97
     focus_loss_coeff: float = 0.01
+    extrinsic_reward_coeff: float = 1.0
+    intrinsic_reward_coeff: float = 1.0
 
 
 @dataclass

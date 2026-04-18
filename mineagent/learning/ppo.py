@@ -115,6 +115,8 @@ class PPO:
         self.clip_ratio = config.clip_ratio
         self.target_kl = config.target_kl
         self.focus_loss_coeff = config.focus_loss_coeff
+        self.extrinsic_reward_coeff = config.extrinsic_reward_coeff
+        self.intrinsic_reward_coeff = config.intrinsic_reward_coeff
         self.actor_optim = optim.Adam(
             self.actor.parameters(),
             lr=config.actor_lr,
@@ -222,7 +224,10 @@ class PPO:
         # The reward for a_t is at r_{t+1}
         env_rewards = torch.tensor(list(data.rewards_buffer)[1:])
         intrinsic_rewards = torch.tensor(list(data.intrinsic_rewards_buffer)[1:])
-        rewards = env_rewards + intrinsic_rewards
+        rewards = (
+            self.extrinsic_reward_coeff * env_rewards
+            + self.intrinsic_reward_coeff * intrinsic_rewards
+        )
         # Need all values since the final one is used to estimate future reward
         values = torch.tensor(list(data.values_buffer))
 
