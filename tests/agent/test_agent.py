@@ -26,6 +26,24 @@ def test_agent_v1_act_single(agent_v1_module: AgentV1):
     assert isinstance(float(action["scroll_delta"]), float)
 
 
+def test_act_stores_extrinsic_reward_from_previous_step() -> None:
+    """Mirrors engine timing: reward from env.step is passed into the next act()."""
+    torch.manual_seed(0)
+    agent = AgentV1(
+        AgentConfig(
+            ppo=PPOConfig(),
+            icm=ICMConfig(),
+            td=TDConfig(),
+            max_buffer_size=100,
+        ),
+    )
+    obs = torch.randn((1, 3, 160, 256))
+    agent.act(obs, reward=0.0)
+    agent.act(obs, reward=7.5)
+    assert agent.memory.rewards_buffer[0] == 0.0
+    assert agent.memory.rewards_buffer[1] == 7.5
+
+
 def test_agent_v1_params(agent_v1_module: AgentV1):
     modules = [
         agent_v1_module.vision,
