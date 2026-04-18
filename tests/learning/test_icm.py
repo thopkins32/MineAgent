@@ -6,7 +6,8 @@ from mineagent.config import AgentConfig, PPOConfig, ICMConfig, TDConfig
 from mineagent.memory.trajectory import TrajectoryBuffer
 from mineagent.client.protocol import NUM_KEYS
 
-ACTION_DIM = NUM_KEYS + 3 + 3 + 2
+ENV_ACTION_DIM = NUM_KEYS + 3 + 3
+FOCUS_DIM = 2
 EMBED_DIM = AgentV1.EMBED_DIM
 
 
@@ -32,10 +33,12 @@ def test_icm_update(icm_module: ICM) -> None:
     for _ in range(buffer_size):
         trajectory.store(
             torch.zeros((EMBED_DIM,), dtype=torch.float),
-            torch.zeros((ACTION_DIM,), dtype=torch.float),
+            torch.zeros((ENV_ACTION_DIM,), dtype=torch.float),
             0.0,
             0.0,
             0.0,
-            torch.ones((ACTION_DIM,), dtype=torch.float),
+            torch.ones((ENV_ACTION_DIM,), dtype=torch.float),
+            focus=torch.zeros((FOCUS_DIM,), dtype=torch.float),
+            focus_logp=torch.ones((FOCUS_DIM,), dtype=torch.float),
         )
     icm_module.update(trajectory)

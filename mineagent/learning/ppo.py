@@ -22,13 +22,17 @@ class PPOSample:
     features : torch.Tensor
         Visual features computed from raw observations
     actions : torch.Tensor
-        Actions taken using features
+        Environment actions taken (no focus)
     returns : torch.Tensor
         The return from the full trajectory computed so far
     advantages : torch.Tensor
         Advantages of taking each action over the alternative, e.g. `Q(s, a) - V(s)`
     log_probabilities: torch.Tensor
-        Log of the probability of selecting the action taken
+        Joint log probability of the environment action
+    focus_actions : torch.Tensor
+        Focus/ROI coordinates (stored separately from env actions)
+    focus_log_probabilities : torch.Tensor
+        Joint log probability of the focus action
     """
 
     features: torch.Tensor
@@ -36,6 +40,8 @@ class PPOSample:
     returns: torch.Tensor
     advantages: torch.Tensor
     log_probabilities: torch.Tensor
+    focus_actions: torch.Tensor
+    focus_log_probabilities: torch.Tensor
 
     def __len__(self):
         return self.features.shape[0]
@@ -44,8 +50,6 @@ class PPOSample:
         self, shuffle: bool = False, batch_size: Union[int, None] = None
     ) -> Generator["PPOSample", None, None]:
         """
-
-
         Parameters
         ----------
         shuffle : bool, optional
@@ -76,6 +80,8 @@ class PPOSample:
                 returns=self.returns[batch_ind],
                 advantages=self.advantages[batch_ind],
                 log_probabilities=self.log_probabilities[batch_ind],
+                focus_actions=self.focus_actions[batch_ind],
+                focus_log_probabilities=self.focus_log_probabilities[batch_ind],
             )
 
             start_idx += batch_size
@@ -108,6 +114,7 @@ class PPO:
         self.gae_discount_factor = config.gae_discount_factor
         self.clip_ratio = config.clip_ratio
         self.target_kl = config.target_kl
+        self.focus_loss_coeff = config.focus_loss_coeff
         self.actor_optim = optim.Adam(
             self.actor.parameters(),
             lr=config.actor_lr,
@@ -126,11 +133,23 @@ class PPO:
         )
 
         action_dist = self.actor(feat)
+
+        # Standard clipped surrogate loss (env actions only)
         logp = joint_logp_action(action_dist, act)
         ratio = torch.exp(logp - logp_old)
         clip_adv = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * adv
-        loss = -(torch.min(ratio * adv, clip_adv)).mean()
+        env_loss = -(torch.min(ratio * adv, clip_adv)).mean()
 
+        # Separate REINFORCE loss for focus head (not clipped, not in KL)
+        focus_dist = torch.distributions.Normal(
+            action_dist.focus_means, action_dist.focus_stds
+        )
+        focus_logp_new = focus_dist.log_prob(data.focus_actions).sum(dim=-1)
+        focus_loss = -(focus_logp_new * adv.detach()).mean()
+
+        loss = env_loss + self.focus_loss_coeff * focus_loss
+
+        # KL is based on env actions only
         kl = (logp_old - logp).mean()
 
         return loss, kl
@@ -177,10 +196,12 @@ class PPO:
 
         This method expects the following at time `t`:
         - data.features[t]: visual features of the environment computed at time `t`
-        - data.actions[t]: the action taken in the environment at time `t`
+        - data.actions[t]: the env action taken in the environment at time `t`
         - data.log_probabilities[t]: the log probability of selecting `data.actions[t]`
         - data.values[t]: the value assigned to `data.features[t]`
         - data.rewards[t]: the reward given by the environment about the action take at time `t - 1`
+        - data.focus[t]: the focus/ROI coordinates at time `t`
+        - data.focus_logp[t]: the log probability of the focus coordinates
         """
 
         # Cannot use the last values here since we don't have the associated reward yet
@@ -189,6 +210,14 @@ class PPO:
         # Sum per-component log probs to get joint log prob per timestep
         raw_logp = torch.stack(list(data.log_probs_buffer)[:-1])
         log_probabilities = raw_logp.sum(dim=-1) if raw_logp.dim() > 1 else raw_logp
+
+        # Focus data (stored separately)
+        focus_actions = torch.stack(list(data.focus_buffer)[:-1])
+        raw_focus_logp = torch.stack(list(data.focus_logp_buffer)[:-1])
+        focus_log_probabilities = (
+            raw_focus_logp.sum(dim=-1) if raw_focus_logp.dim() > 1 else raw_focus_logp
+        )
+
         # Cannot use the first reward value since we no longer have the associated feature
         # The reward for a_t is at r_{t+1}
         env_rewards = torch.tensor(list(data.rewards_buffer)[1:])
@@ -215,6 +244,8 @@ class PPO:
             returns=returns,
             advantages=advantages,
             log_probabilities=log_probabilities,
+            focus_actions=focus_actions,
+            focus_log_probabilities=focus_log_probabilities,
         )
 
     def update(self, trajectory: TrajectoryBuffer) -> None:

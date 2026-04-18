@@ -45,7 +45,7 @@ class ForwardDynamics(nn.Module):
         from ..client.protocol import NUM_KEYS
 
         if action_dim is None:
-            action_dim = NUM_KEYS + 3 + 3 + 2
+            action_dim = NUM_KEYS + 3 + 3
         self.l1 = nn.Linear(embed_dim + action_dim, 512)
         self.l2 = nn.Linear(512, embed_dim)
 

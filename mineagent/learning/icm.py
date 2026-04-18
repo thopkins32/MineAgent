@@ -167,12 +167,9 @@ class ICM:
         loss = loss + F.binary_cross_entropy_with_logits(
             pred.mouse_button_logits, actions[:, col : col + 3]
         )
-        col += 3
 
-        # Gaussian NLL for focus
-        loss = loss + F.gaussian_nll_loss(
-            pred.focus_means, actions[:, col : col + 2], pred.focus_stds**2
-        )
+        # Focus is excluded -- it's an internal perception decision,
+        # not part of the environment state transition.
 
         return loss
 
