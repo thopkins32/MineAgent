@@ -24,6 +24,9 @@ public class DataBridge {
   // Connection state for input suppression
   private final AtomicBoolean clientConnected = new AtomicBoolean(false);
 
+  /** Extrinsic reward (damage, death) not yet sent with a frame. */
+  private final AtomicReference<Double> pendingExtrinsicReward = new AtomicReference<>(0.0);
+
   private DataBridge() {}
 
   public static synchronized DataBridge getInstance() {
@@ -78,5 +81,22 @@ public class DataBridge {
   /** Returns whether a Python client is currently connected. */
   public boolean isClientConnected() {
     return clientConnected.get();
+  }
+
+  /** Adds to the reward bundled with the next observation (safe across threads). */
+  public void addExtrinsicReward(double delta) {
+    Double current;
+    do {
+      current = pendingExtrinsicReward.get();
+    } while (!pendingExtrinsicReward.compareAndSet(current, current + delta));
+  }
+
+  /** Returns pending extrinsic reward and clears it. */
+  public double takeExtrinsicReward() {
+    return pendingExtrinsicReward.getAndSet(0.0);
+  }
+
+  public boolean hasPendingExtrinsicReward() {
+    return Double.compare(pendingExtrinsicReward.get(), 0.0) != 0;
   }
 }

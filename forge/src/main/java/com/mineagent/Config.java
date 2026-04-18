@@ -20,6 +20,9 @@ public class Config {
   public static final ForgeConfigSpec.ConfigValue<Boolean> SUPPRESS_SYSTEM_MOUSE_INPUT;
   public static final ForgeConfigSpec.ConfigValue<Boolean> SUPPRESS_SYSTEM_KEYBOARD_INPUT;
 
+  public static final ForgeConfigSpec.ConfigValue<Double> EXTRINSIC_DAMAGE_PER_POINT;
+  public static final ForgeConfigSpec.ConfigValue<Double> DEATH_PENALTY;
+
   // Built Configuration Specification
   public static final ForgeConfigSpec SPEC;
 
@@ -89,6 +92,21 @@ public class Config {
         BUILDER
             .comment("If true, agent keyboard input takes priority when Python client is connected")
             .define("suppress_system_keyboard_input", true);
+
+    BUILDER.pop();
+
+    BUILDER.comment("Extrinsic reward (subtracted from observation reward field)");
+    BUILDER.push("rewards");
+
+    EXTRINSIC_DAMAGE_PER_POINT =
+        BUILDER
+            .comment("Penalty per 1 HP of hurt damage on the local player (0 disables)")
+            .defineInRange("extrinsic_damage_per_point", 1.0, 0.0, 1000.0);
+
+    DEATH_PENALTY =
+        BUILDER
+            .comment("Extra penalty on local player death, once (0 disables)")
+            .defineInRange("death_penalty", 100.0, 0.0, 1_000_000.0);
 
     BUILDER.pop();
 

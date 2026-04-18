@@ -17,6 +17,7 @@ class DataBridgeTest {
     // Since DataBridge uses singleton pattern, we'll work with the instance
     dataBridge = DataBridge.getInstance();
     mockNetworkHandler = mock(NetworkHandler.class);
+    dataBridge.takeExtrinsicReward();
   }
 
   @Test
@@ -68,5 +69,20 @@ class DataBridgeTest {
     dataBridge.sendObservation(obs);
 
     verify(mockNetworkHandler, times(1)).setLatest(obs.frame(), obs.reward());
+  }
+
+  @Test
+  void extrinsicReward_accumulatesResetsAndSends() {
+    dataBridge.addExtrinsicReward(-1.5);
+    dataBridge.addExtrinsicReward(-2.5);
+    assertTrue(dataBridge.hasPendingExtrinsicReward());
+    assertEquals(-4.0, dataBridge.takeExtrinsicReward(), 1e-9);
+    assertFalse(dataBridge.hasPendingExtrinsicReward());
+
+    dataBridge.setNetworkHandler(mockNetworkHandler);
+    dataBridge.addExtrinsicReward(-7.0);
+    byte[] frame = new byte[] {9};
+    dataBridge.sendObservation(new Observation(dataBridge.takeExtrinsicReward(), frame));
+    verify(mockNetworkHandler).setLatest(frame, -7.0);
   }
 }
