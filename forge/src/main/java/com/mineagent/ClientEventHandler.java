@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.logging.LogUtils;
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -33,24 +35,27 @@ public class ClientEventHandler {
   @SubscribeEvent
   public static void onClientTick(TickEvent.ClientTickEvent event) {
     Minecraft mc = Minecraft.getInstance();
-    if (mc.level != null && mc.player != null && event.phase == TickEvent.Phase.END) {
-      // Handle input suppression when client is connected
-      handleInputSuppression(mc);
-
-      // Process any pending raw input
-      final RawInput rawInput = dataBridge.getLatestRawInput();
-      if (rawInput != null) {
-        dataBridge.getInputInjector().inject(rawInput);
-      }
-
-      // IMPORTANT: Maintain button state every tick for continuous actions
-      // This fires press events and sets KeyMapping states for held buttons
-      dataBridge.getInputInjector().maintainButtonState();
-
-      // Capture and send observation
-      final byte[] frame = captureFrame();
-      dataBridge.sendObservation(new Observation(0.0, frame));
+    if (mc.level == null || mc.player == null || event.phase != TickEvent.Phase.END) {
+      return;
     }
+
+    // Handle input suppression when client is connected
+    handleInputSuppression(mc);
+
+    // Process any pending raw input
+    final RawInput rawInput = dataBridge.getLatestRawInput();
+    if (rawInput != null) {
+      dataBridge.getInputInjector().inject(rawInput);
+    }
+
+    // IMPORTANT: Maintain button state every tick for continuous actions
+    // This fires press events and sets KeyMapping states for held buttons
+    dataBridge.getInputInjector().maintainButtonState();
+
+    // Observations only while the local player exists (no capture on death screen). Extrinsic
+    // reward queued during death therefore attaches to the first frame after respawn if needed.
+    double reward = dataBridge.takeExtrinsicReward();
+    dataBridge.sendObservation(new Observation(reward, captureFrame()));
   }
 
   /**
@@ -77,18 +82,29 @@ public class ClientEventHandler {
 
   @SubscribeEvent
   public static void onPlayerHurt(LivingHurtEvent event) {
-    // Future: Calculate reward based on damage
-    // if (event.getEntity() instanceof Player) {
-    //     dataBridge.sendEvent("PLAYER_HURT", String.valueOf(event.getAmount()));
-    // }
+    if (!isClientControlledPlayer(event.getEntity())) {
+      return;
+    }
+    double perPoint = Config.EXTRINSIC_DAMAGE_PER_POINT.get();
+    if (perPoint != 0.0) {
+      dataBridge.addExtrinsicReward(-perPoint * event.getAmount());
+    }
   }
 
   @SubscribeEvent
   public static void onPlayerDeath(LivingDeathEvent event) {
-    // Future: Calculate negative reward on death
-    // if (event.getEntity() instanceof Player) {
-    //     dataBridge.sendEvent("PLAYER_DEATH", "-100.0");
-    // }
+    if (!isClientControlledPlayer(event.getEntity())) {
+      return;
+    }
+    double penalty = Config.DEATH_PENALTY.get();
+    if (penalty != 0.0) {
+      dataBridge.addExtrinsicReward(-penalty);
+    }
+  }
+
+  /** The player the agent controls on this machine (not other players or mobs). */
+  private static boolean isClientControlledPlayer(LivingEntity entity) {
+    return entity instanceof LocalPlayer p && p == Minecraft.getInstance().player;
   }
 
   private static byte[] captureFrame() {
