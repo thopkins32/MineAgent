@@ -426,8 +426,8 @@ def raw_input_to_action(raw_input: RawInput) -> dict[str, np.ndarray]:
 
     return {
         "keys": keys,
-        "mouse_dx": np.float32(raw_input.mouse_dx),
-        "mouse_dy": np.float32(raw_input.mouse_dy),
+        "mouse_dx": np.array(raw_input.mouse_dx, dtype=np.float32),
+        "mouse_dy": np.array(raw_input.mouse_dy, dtype=np.float32),
         "mouse_buttons": mouse_buttons,
-        "scroll_delta": np.float32(raw_input.scroll_delta),
+        "scroll_delta": np.array(raw_input.scroll_delta, dtype=np.float32),
     }

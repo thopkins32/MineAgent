@@ -94,11 +94,11 @@ class AgentV1:
         a = action.squeeze(0)
         keys = (a[:NUM_KEYS] > 0.5).to(torch.int8).numpy()
         col = NUM_KEYS
-        mouse_dx = np.float32(np.clip(a[col].item(), *MOUSE_DX_RANGE))
+        mouse_dx = np.clip(a[col], *MOUSE_DX_RANGE)
         col += 1
-        mouse_dy = np.float32(np.clip(a[col].item(), *MOUSE_DY_RANGE))
+        mouse_dy = np.clip(a[col], *MOUSE_DY_RANGE)
         col += 1
-        scroll = np.float32(np.clip(a[col].item(), *SCROLL_RANGE))
+        scroll = np.clip(a[col], *SCROLL_RANGE)
         col += 1
         mouse_buttons = (a[col : col + 3] > 0.5).to(torch.int8).numpy()
         return {
