@@ -35,29 +35,25 @@ public class ClientEventHandler {
   @SubscribeEvent
   public static void onClientTick(TickEvent.ClientTickEvent event) {
     Minecraft mc = Minecraft.getInstance();
-    if (mc.level == null || event.phase != TickEvent.Phase.END) {
-      return;
-    }
-    boolean inGame = mc.player != null;
-    if (!inGame && !dataBridge.hasPendingExtrinsicReward()) {
+    if (mc.level == null || mc.player == null || event.phase != TickEvent.Phase.END) {
       return;
     }
 
-    if (inGame) {
-      // Handle input suppression when client is connected
-      handleInputSuppression(mc);
+    // Handle input suppression when client is connected
+    handleInputSuppression(mc);
 
-      // Process any pending raw input
-      final RawInput rawInput = dataBridge.getLatestRawInput();
-      if (rawInput != null) {
-        dataBridge.getInputInjector().inject(rawInput);
-      }
-
-      // IMPORTANT: Maintain button state every tick for continuous actions
-      // This fires press events and sets KeyMapping states for held buttons
-      dataBridge.getInputInjector().maintainButtonState();
+    // Process any pending raw input
+    final RawInput rawInput = dataBridge.getLatestRawInput();
+    if (rawInput != null) {
+      dataBridge.getInputInjector().inject(rawInput);
     }
 
+    // IMPORTANT: Maintain button state every tick for continuous actions
+    // This fires press events and sets KeyMapping states for held buttons
+    dataBridge.getInputInjector().maintainButtonState();
+
+    // Observations only while the local player exists (no capture on death screen). Extrinsic
+    // reward queued during death therefore attaches to the first frame after respawn if needed.
     double reward = dataBridge.takeExtrinsicReward();
     dataBridge.sendObservation(new Observation(reward, captureFrame()));
   }
