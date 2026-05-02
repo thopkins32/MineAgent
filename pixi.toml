@@ -3,31 +3,31 @@ channels = ["conda-forge", "pytorch"]
 platforms = ["linux-64"]
 
 [dependencies]
-hatchling = "*"
+pyyaml = "*"
+dacite = "*"
+gradle = "<9.0.0"
+gymnasium = "*"
+numpy = "*"
+openjdk = "21.*"
+pyright = "*"
 pytorch = "*"
-torchvision = "*"
-numpy = "==1.26.4"
 scipy = "*"
 tensorboard = "*"
-gradle = "<9.0.0"
-openjdk = "21.*"
+torchvision = "*"
+tqdm = "*"
+nodejs = ">=18"
+pre-commit = "*"
+pytest = "*"
+pytest-asyncio = "*"
+pytest-mock = "*"
+ruff = "*"
+types-PyYAML = "*"
+matplotlib = "*"
 
 [pypi-dependencies]
-mineagent = { path = ".", editable = true }
-
-[environments]
-default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-
-[feature.dev.dependencies]
-nodejs = ">=18"
-
-[feature.dev.pypi-dependencies]
-mineagent = { path = ".", editable = true, extras = ["dev"] }
 
 [tasks]
 mineagent = "mineagent"
 gradle-run-client = "cd forge && gradle runClient"
 gradle-build = "cd forge && gradle build"
 gradle-test = "cd forge && gradle test"
-
