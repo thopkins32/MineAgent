@@ -1,0 +1,7 @@
+{
+  "include": ["mineagent", "tests", "scripts"],
+  "exclude": ["forge", ".pixi", "**/__pycache__"],
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "standard",
+  "reportPrivateImportUsage": false
+}

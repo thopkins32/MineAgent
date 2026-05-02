@@ -13,7 +13,7 @@ description: >-
 
 MineAgent is a **research codebase** for *virtual intelligence*: AI that exists and acts **inside** a virtual world. Minecraft is the primary testbed because it is diverse and challenging while still being a tractable approximation of rich environments.
 
-The project is **early-stage** (see `README.md`, `pyproject.toml` classifiers). The near-term research direction is **visual perception plus curiosity**, with the agent initially oriented toward **observation and head / attention control** (region-of-interest / camera-style movement) rather than full embodied locomotion mastery.
+The project is **early-stage** (see `README.md`). The near-term research direction is **visual perception plus curiosity**, with the agent initially oriented toward **observation and head / attention control** (region-of-interest / camera-style movement) rather than full embodied locomotion mastery.
 
 ## Repository map
 
@@ -25,7 +25,7 @@ The project is **early-stage** (see `README.md`, `pyproject.toml` classifiers). 
 | `tests/` | Pytest suite mirroring package structure |
 | `.github/workflows/` | CI: pytest (Pixi dev env), Gradle build, pre-commit |
 
-Entrypoint for running the loop: **`mineagent.engine:run`** (console script `mineagent` from `pyproject.toml`).
+Entrypoint for running the loop: **`mineagent.engine:run`** (invoked as `pixi run mineagent` or the `mineagent` CLI when the package is on `PATH`; task defined in `pixi.toml`).
 
 ## Runtime shape (one sentence)
 
@@ -61,4 +61,4 @@ Skills live under **`.agents/skills/`** in this repo. Other tools (Cursor, Openc
 
 ## External references (human)
 
-- Upstream-style homepage / issues URLs are in `pyproject.toml` `[project.urls]` (GitHub project name may differ from local folder name).
+- Issue tracker and contribution notes: see `README.md` (GitHub project name may differ from local folder name).

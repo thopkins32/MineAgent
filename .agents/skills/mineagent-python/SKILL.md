@@ -46,6 +46,10 @@ description: >-
 - Template: `config_templates/config.yaml`.
 - Run: `mineagent -f path/to.yaml` and/or `mineagent -kvp engine.max_steps=100 agent.ppo.actor_lr=1e-4` (nested keys with `.`).
 
+## Typing
+
+Static analysis uses **Pyright**; settings live in repo-root `pyrightconfig.json`.
+
 ## Tests
 
-Mirror structure under `tests/`; run via dev workflow skill (`pixi run -e dev pytest ./tests`).
+Mirror structure under `tests/`; run via dev workflow skill (`pixi run pytest ./tests`).
