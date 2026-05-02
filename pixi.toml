@@ -25,9 +25,10 @@ types-PyYAML = "*"
 matplotlib = "*"
 
 [pypi-dependencies]
+mineagent = { path = ".", editable = true }
 
 [tasks]
-mineagent = "mineagent"
+mineagent = "python -m mineagent.engine"
 gradle-run-client = "cd forge && gradle runClient"
 gradle-build = "cd forge && gradle build"
 gradle-test = "cd forge && gradle test"
