@@ -108,44 +108,73 @@ class AsyncMinecraftClient:
             self._connected = False
             return False
 
-    async def receive_observation(self) -> Observation | None:
+    async def receive_observation(self) -> Observation:
         """
         Receive an observation from the Minecraft Forge mod.
 
         Returns
         -------
-        Observation | None
-            The observation if received successfully, None otherwise
+        Observation
+            Parsed observation with reward and frame.
+
+        Raises
+        ------
+        ConnectionError
+            If not connected, the connection drops, or the mod sends a
+            frame whose size does not match the configured dimensions.
         """
         if not self._connected or not self._observation_reader:
-            self._logger.error("Not connected to Minecraft Forge mod")
-            return None
+            raise ConnectionError("Not connected to Minecraft Forge mod")
 
         try:
             header = await self._observation_reader.readexactly(12)
-            reward = struct.unpack(">d", header[0:8])[0]
-            frame_length = struct.unpack(">I", header[8:12])[0]
+        except asyncio.IncompleteReadError as e:
+            self._connected = False
+            raise ConnectionError(
+                f"Connection lost while reading observation header: "
+                f"got {len(e.partial)} of 12 bytes"
+            ) from e
 
-            if frame_length == 0:
-                return Observation(
-                    reward=reward,
-                    frame=np.zeros(
-                        (self.config.frame_height, self.config.frame_width, 3),
-                        dtype=np.uint8,
-                    ),
-                )
+        reward = struct.unpack(">d", header[0:8])[0]
+        frame_length = struct.unpack(">I", header[8:12])[0]
 
+        expected_length = self.config.frame_height * self.config.frame_width * 3
+
+        if frame_length == 0:
+            return Observation(
+                reward=reward,
+                frame=np.zeros(
+                    (self.config.frame_height, self.config.frame_width, 3),
+                    dtype=np.uint8,
+                ),
+            )
+
+        if frame_length != expected_length:
+            self._connected = False
+            raise ConnectionError(
+                f"Frame size mismatch: mod sent {frame_length} bytes "
+                f"but expected {expected_length} "
+                f"(configured {self.config.frame_width}x"
+                f"{self.config.frame_height}x3). "
+                f"Check that the Forge mod window size matches "
+                f"ConnectionConfig.frame_width/frame_height."
+            )
+
+        try:
             frame_data = await self._observation_reader.readexactly(frame_length)
+        except asyncio.IncompleteReadError as e:
+            self._connected = False
+            raise ConnectionError(
+                f"Connection lost while reading frame data: "
+                f"got {len(e.partial)} of {frame_length} bytes"
+            ) from e
 
+        try:
             return parse_observation(
                 header,
                 frame_data,
                 (self.config.frame_height, self.config.frame_width),
             )
-        except asyncio.IncompleteReadError:
-            self._logger.warning("Incomplete observation received")
-            return None
         except OSError as e:
-            self._logger.error("Failed to receive observation: %s", e)
             self._connected = False
-            return None
+            raise ConnectionError(f"Failed to receive observation: {e}") from e

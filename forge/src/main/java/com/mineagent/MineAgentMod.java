@@ -48,6 +48,7 @@ public class MineAgentMod {
 
   private void setupWindow() {
     Minecraft mc = Minecraft.getInstance();
+    mc.options.pauseOnLostFocus = false;
     if (mc.getWindow() != null) {
       Window window = mc.getWindow();
       int configWidth = Config.WINDOW_WIDTH.get();

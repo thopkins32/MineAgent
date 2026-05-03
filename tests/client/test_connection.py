@@ -158,15 +158,30 @@ async def test_receive_observation(client):
 async def test_receive_observation_incomplete(client):
     reader, _ = await _connect_client(client)
     reader.readexactly = AsyncMock(
-        side_effect=asyncio.IncompleteReadError(partial=b"", expected=12)
+        side_effect=asyncio.IncompleteReadError(partial=b"\x00" * 5, expected=12)
     )
 
-    obs = await client.receive_observation()
+    with pytest.raises(ConnectionError, match="got 5 of 12 bytes"):
+        await client.receive_observation()
 
-    assert obs is None
+    assert client.connected is False
 
 
 @pytest.mark.asyncio
 async def test_receive_observation_not_connected(client):
-    obs = await client.receive_observation()
-    assert obs is None
+    with pytest.raises(ConnectionError, match="Not connected"):
+        await client.receive_observation()
+
+
+@pytest.mark.asyncio
+async def test_receive_observation_frame_size_mismatch(client):
+    """Mod sends a frame whose size doesn't match configured dimensions."""
+    wrong_size = 100 * 100 * 3
+    header = struct.pack(">d", 0.0) + struct.pack(">I", wrong_size)
+    reader, _ = await _connect_client(client)
+    reader.readexactly = AsyncMock(return_value=header)
+
+    with pytest.raises(ConnectionError, match="Frame size mismatch"):
+        await client.receive_observation()
+
+    assert client.connected is False

@@ -83,14 +83,8 @@ class MinecraftEnv(gym.Env):
         self._run_async(self._client.send_action(RawInput.release_all()))
 
         obs = self._run_async(self._client.receive_observation())
-        if obs is None:
-            frame = np.zeros(
-                (self.env_config.frame_height, self.env_config.frame_width, 3),
-                dtype=np.uint8,
-            )
-        else:
-            frame = obs.frame
-            self._last_reward = obs.reward
+        frame = obs.frame
+        self._last_reward = obs.reward
 
         self._step_count = 0
 
@@ -103,16 +97,8 @@ class MinecraftEnv(gym.Env):
         self._run_async(self._client.send_action(raw_input))
 
         obs = self._run_async(self._client.receive_observation())
-
-        if obs is not None:
-            frame = obs.frame
-            reward = obs.reward
-        else:
-            frame = np.zeros(
-                (self.env_config.frame_height, self.env_config.frame_width, 3),
-                dtype=np.uint8,
-            )
-            reward = 0.0
+        frame = obs.frame
+        reward = obs.reward
 
         self._last_reward = reward
         self._step_count += 1
@@ -123,7 +109,6 @@ class MinecraftEnv(gym.Env):
         info = {
             "step_count": self._step_count,
             "reward": reward,
-            "frame_received": obs is not None,
         }
 
         return frame, reward, terminated, truncated, info

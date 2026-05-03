@@ -5,6 +5,9 @@ import com.mojang.logging.LogUtils;
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
@@ -34,12 +37,53 @@ public class ClientEventHandler {
   /** Main game tick handler. Processes raw input and captures observations. */
   @SubscribeEvent
   public static void onClientTick(TickEvent.ClientTickEvent event) {
+    if (event.phase != TickEvent.Phase.END) {
+      return;
+    }
     Minecraft mc = Minecraft.getInstance();
-    if (mc.level == null || mc.player == null || event.phase != TickEvent.Phase.END) {
+    boolean inWorld = mc.level != null && mc.player != null;
+    boolean onTitleScreen = mc.screen instanceof TitleScreen;
+    boolean onDeathScreen = mc.screen instanceof DeathScreen;
+    boolean onPauseScreen = mc.screen instanceof PauseScreen;
+    boolean isMenu = mc.screen != null;
+    boolean inWorldWithOverlay = mc.level != null && mc.screen != null;
+
+    if (onTitleScreen) {
+      mc.createWorldOpenFlows().openWorld("New World", () -> {
+        mc.forceSetScreen(new TitleScreen());
+      });
+      // final ResetInput resetInput = dataBridge.getLatestResetInput();
+      // if (resetInput != null) {
+      //   // TODO: Open new world? This currently only opens existing world
+      //   // Minecraft mc = Minecraft.getInstance();
+      //   // createFreshLevel opens the world creation flow.
+      //   // For a quick programmatic world with defaults:
+      //   // mc.createWorldOpenFlows().createFreshLevel(
+      //   //     saveName,           // String: folder name for the save
+      //   //     displayName,        // String: human-readable world name
+      //   //     WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. -- ResourceKey<WorldPreset>
+      //   //     null,               // @Nullable Screen to return to on cancel
+      //   //     null                // @Nullable WorldCreationContext overrides
+      //   // );
+      // }
+      return;
+    }
+    else if (onPauseScreen) {
+      mc.setScreen(null);
       return;
     }
 
-    // Handle input suppression when client is connected
+    if (!inWorld) {
+      return;
+    }
+
+    if (onDeathScreen) {
+      mc.player.respawn();
+      return;
+    }
+
+    enforceWindowSize(mc);
+
     handleInputSuppression(mc);
 
     // Process any pending raw input
@@ -105,6 +149,15 @@ public class ClientEventHandler {
   /** The player the agent controls on this machine (not other players or mobs). */
   private static boolean isClientControlledPlayer(LivingEntity entity) {
     return entity instanceof LocalPlayer p && p == Minecraft.getInstance().player;
+  }
+
+  private static void enforceWindowSize(Minecraft mc) {
+    Window window = mc.getWindow();
+    int targetW = Config.WINDOW_WIDTH.get();
+    int targetH = Config.WINDOW_HEIGHT.get();
+    if (window.getWidth() != targetW || window.getHeight() != targetH) {
+      window.setWindowed(targetW, targetH);
+    }
   }
 
   private static byte[] captureFrame() {
