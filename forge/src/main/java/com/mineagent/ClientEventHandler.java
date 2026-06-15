@@ -5,6 +5,7 @@ import com.mojang.logging.LogUtils;
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
@@ -19,7 +20,10 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.slf4j.Logger;
 
-/** Handles client-side game events and coordinates input injection with observations. */
+/**
+ * Handles client-side game events and coordinates input injection with
+ * observations.
+ */
 public class ClientEventHandler {
   private static final Logger LOGGER = LogUtils.getLogger();
   private static final DataBridge dataBridge = DataBridge.getInstance();
@@ -42,33 +46,42 @@ public class ClientEventHandler {
     }
     Minecraft mc = Minecraft.getInstance();
     boolean inWorld = mc.level != null && mc.player != null;
+    boolean onAccessibilityScreen = mc.screen instanceof AccessibilityOnboardingScreen;
     boolean onTitleScreen = mc.screen instanceof TitleScreen;
     boolean onDeathScreen = mc.screen instanceof DeathScreen;
     boolean onPauseScreen = mc.screen instanceof PauseScreen;
     boolean isMenu = mc.screen != null;
     boolean inWorldWithOverlay = mc.level != null && mc.screen != null;
+    LOGGER.info(mc.screen.toString());
 
-    if (onTitleScreen) {
-      mc.createWorldOpenFlows().openWorld("New World", () -> {
-        mc.forceSetScreen(new TitleScreen());
-      });
+    if (onTitleScreen || onAccessibilityScreen) {
+      // mc.createWorldOpenFlows().openWorld("New World", () -> {
+      // mc.forceSetScreen(new TitleScreen());
+      // });
+      mc.createWorldOpenFlows().createFreshLevel(
+          "new-world", // String: folder name for the save
+          "New World", // String: human-readable world name
+          WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. -- ResourceKey<WorldPreset>
+          null, // @Nullable Screen to return to on cancel
+          null // @Nullable WorldCreationContext overrides
+      );
       // final ResetInput resetInput = dataBridge.getLatestResetInput();
       // if (resetInput != null) {
-      //   // TODO: Open new world? This currently only opens existing world
-      //   // Minecraft mc = Minecraft.getInstance();
-      //   // createFreshLevel opens the world creation flow.
-      //   // For a quick programmatic world with defaults:
-      //   // mc.createWorldOpenFlows().createFreshLevel(
-      //   //     saveName,           // String: folder name for the save
-      //   //     displayName,        // String: human-readable world name
-      //   //     WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. -- ResourceKey<WorldPreset>
-      //   //     null,               // @Nullable Screen to return to on cancel
-      //   //     null                // @Nullable WorldCreationContext overrides
-      //   // );
+      // // TODO: Open new world? This currently only opens existing world
+      // // Minecraft mc = Minecraft.getInstance();
+      // // createFreshLevel opens the world creation flow.
+      // // For a quick programmatic world with defaults:
+      // // mc.createWorldOpenFlows().createFreshLevel(
+      // // saveName, // String: folder name for the save
+      // // displayName, // String: human-readable world name
+      // // WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. --
+      // ResourceKey<WorldPreset>
+      // // null, // @Nullable Screen to return to on cancel
+      // // null // @Nullable WorldCreationContext overrides
+      // // );
       // }
       return;
-    }
-    else if (onPauseScreen) {
+    } else if (onPauseScreen) {
       mc.setScreen(null);
       return;
     }
@@ -96,14 +109,17 @@ public class ClientEventHandler {
     // This fires press events and sets KeyMapping states for held buttons
     dataBridge.getInputInjector().maintainButtonState();
 
-    // Observations only while the local player exists (no capture on death screen). Extrinsic
-    // reward queued during death therefore attaches to the first frame after respawn if needed.
+    // Observations only while the local player exists (no capture on death screen).
+    // Extrinsic
+    // reward queued during death therefore attaches to the first frame after
+    // respawn if needed.
     double reward = dataBridge.takeExtrinsicReward();
     dataBridge.sendObservation(new Observation(reward, captureFrame()));
   }
 
   /**
-   * Handles input suppression when a Python client is connected. Disables the system cursor to
+   * Handles input suppression when a Python client is connected. Disables the
+   * system cursor to
    * prevent real mouse input from interfering.
    */
   private static void handleInputSuppression(Minecraft mc) {
@@ -146,7 +162,9 @@ public class ClientEventHandler {
     }
   }
 
-  /** The player the agent controls on this machine (not other players or mobs). */
+  /**
+   * The player the agent controls on this machine (not other players or mobs).
+   */
   private static boolean isClientControlledPlayer(LivingEntity entity) {
     return entity instanceof LocalPlayer p && p == Minecraft.getInstance().player;
   }
