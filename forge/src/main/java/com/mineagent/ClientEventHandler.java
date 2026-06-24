@@ -4,12 +4,19 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.logging.LogUtils;
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
-import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -52,34 +59,28 @@ public class ClientEventHandler {
     boolean onPauseScreen = mc.screen instanceof PauseScreen;
     boolean isMenu = mc.screen != null;
     boolean inWorldWithOverlay = mc.level != null && mc.screen != null;
-    LOGGER.info(mc.screen.toString());
 
     if (onTitleScreen || onAccessibilityScreen) {
-      // mc.createWorldOpenFlows().openWorld("New World", () -> {
-      // mc.forceSetScreen(new TitleScreen());
-      // });
-      mc.createWorldOpenFlows().createFreshLevel(
-          "new-world", // String: folder name for the save
-          "New World", // String: human-readable world name
-          WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. -- ResourceKey<WorldPreset>
-          null, // @Nullable Screen to return to on cancel
-          null // @Nullable WorldCreationContext overrides
-      );
-      // final ResetInput resetInput = dataBridge.getLatestResetInput();
-      // if (resetInput != null) {
-      // // TODO: Open new world? This currently only opens existing world
-      // // Minecraft mc = Minecraft.getInstance();
-      // // createFreshLevel opens the world creation flow.
-      // // For a quick programmatic world with defaults:
-      // // mc.createWorldOpenFlows().createFreshLevel(
-      // // saveName, // String: folder name for the save
-      // // displayName, // String: human-readable world name
-      // // WorldPresets.NORMAL, // or FLAT, AMPLIFIED, etc. --
-      // ResourceKey<WorldPreset>
-      // // null, // @Nullable Screen to return to on cancel
-      // // null // @Nullable WorldCreationContext overrides
-      // // );
-      // }
+      String worldName = Config.WORLD_NAME.get();
+      if (Config.CREATE_NEW_WORLD.get()) {
+        String folderName = worldName.toLowerCase().replace(' ', '-');
+        mc.createWorldOpenFlows()
+            .createFreshLevel(
+                folderName,
+                new LevelSettings(
+                    worldName,
+                    GameType.SURVIVAL,
+                    false,
+                    Difficulty.NORMAL,
+                    false,
+                    new GameRules(WorldDataConfiguration.DEFAULT.enabledFeatures()),
+                    WorldDataConfiguration.DEFAULT),
+                WorldOptions.defaultWithRandomSeed(),
+                WorldPresets::createNormalWorldDimensions,
+                new TitleScreen());
+      } else {
+        mc.createWorldOpenFlows().openWorld(worldName, () -> mc.forceSetScreen(new TitleScreen()));
+      }
       return;
     } else if (onPauseScreen) {
       mc.setScreen(null);

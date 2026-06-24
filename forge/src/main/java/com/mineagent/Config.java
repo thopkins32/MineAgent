@@ -23,6 +23,9 @@ public class Config {
   public static final ForgeConfigSpec.ConfigValue<Double> EXTRINSIC_DAMAGE_PER_POINT;
   public static final ForgeConfigSpec.ConfigValue<Double> DEATH_PENALTY;
 
+  public static final ForgeConfigSpec.ConfigValue<Boolean> CREATE_NEW_WORLD;
+  public static final ForgeConfigSpec.ConfigValue<String> WORLD_NAME;
+
   // Built Configuration Specification
   public static final ForgeConfigSpec SPEC;
 
@@ -107,6 +110,22 @@ public class Config {
         BUILDER
             .comment("Extra penalty on local player death, once (0 disables)")
             .defineInRange("death_penalty", 100.0, 0.0, 1_000_000.0);
+
+    BUILDER.pop();
+
+    BUILDER.comment("World Configuration");
+    BUILDER.push("world");
+
+    CREATE_NEW_WORLD =
+        BUILDER
+            .comment(
+                "If true, create a new world on startup; if false, load an existing save with the given name")
+            .define("create_new_world", false);
+
+    WORLD_NAME =
+        BUILDER
+            .comment("Display name of the world to load or create (e.g. \"New World\")")
+            .define("world_name", "New World");
 
     BUILDER.pop();
 
