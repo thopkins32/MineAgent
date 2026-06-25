@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -61,6 +62,7 @@ class MinecraftEnv(gym.Env):
 
         self._step_count = 0
         self._last_reward: float = 0.0
+        self._minecraft_process: asyncio.subprocess.Process | None = None
 
     def _ensure_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None or self._loop.is_closed():
@@ -71,10 +73,30 @@ class MinecraftEnv(gym.Env):
         loop = self._ensure_loop()
         return loop.run_until_complete(coro)
 
+    async def _launch_minecraft_process(self) -> None:
+        """Launch minecraft in a Python subprocess."""
+        if (
+            self._minecraft_process is not None
+            and self._minecraft_process.returncode is None
+        ):
+            return  # already running
+
+        self._minecraft_process = await asyncio.create_subprocess_exec(
+            "gradle",
+            "runClient",
+            cwd=Path.cwd() / "forge",
+            # TODO: To a file instead of DEVNULL
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed, options=options)
+
+        self._run_async(self._launch_minecraft_process())
 
         if not self._client.connected:
             if not self._run_async(self._client.connect()):
@@ -115,6 +137,20 @@ class MinecraftEnv(gym.Env):
 
     def render(self, mode: str = "rgb_array") -> np.ndarray | None:
         raise NotImplementedError("Rendering is not supported.")
+
+    async def _stop_minecraft_process(self) -> None:
+        if (
+            self._minecraft_process is None
+            or self._minecraft_process.returncode is not None
+        ):
+            return  # already stopped
+
+        self._minecraft_process.terminate()
+        try:
+            await asyncio.wait_for(self._minecraft_process.wait(), timeout=60)
+        except asyncio.TimeoutError:
+            self._minecraft_process.kill()
+            await self._minecraft_process.wait()
 
     def close(self):
         if self._client.connected:

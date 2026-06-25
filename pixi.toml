@@ -28,7 +28,7 @@ matplotlib = "*"
 mineagent = { path = ".", editable = true }
 
 [tasks]
-mineagent = "python -m mineagent.engine"
+mineagent = "python -m mineagent.run"
 gradle-run-client = "cd forge && gradle runClient"
 gradle-build = "cd forge && gradle build"
 gradle-test = "cd forge && gradle test"
