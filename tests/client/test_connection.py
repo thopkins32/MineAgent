@@ -18,8 +18,7 @@ def config():
     return ConnectionConfig(
         frame_width=FRAME_WIDTH,
         frame_height=FRAME_HEIGHT,
-        max_retries=3,
-        retry_delay=0.0,
+        timeout=300,
     )
 
 

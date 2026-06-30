@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 
 /**
- * Handles network communication between the Minecraft mod and Python agent. Uses Unix domain
+ * Handles network communication between the Minecraft mod and Python agent.
+ * Uses Unix domain
  * sockets for low-latency IPC.
  */
 public class NetworkHandler implements Runnable {
@@ -164,11 +165,15 @@ public class NetworkHandler implements Runnable {
   /**
    * Handles an action client connection, reading variable-size RawInput messages.
    *
-   * <p>RawInput protocol format: - 1 byte: numKeysPressed (0-255) - N*2 bytes: keyCodes (shorts) -
-   * 4 bytes: mouseDeltaX (float) - 4 bytes: mouseDeltaY (float) - 1 byte: mouseButtons - 4 bytes:
+   * <p>
+   * RawInput protocol format: - 1 byte: numKeysPressed (0-255) - N*2 bytes:
+   * keyCodes (shorts) -
+   * 4 bytes: mouseDeltaX (float) - 4 bytes: mouseDeltaY (float) - 1 byte:
+   * mouseButtons - 4 bytes:
    * scrollDelta (float) - 2 bytes: textLength - M bytes: textBytes (UTF-8)
    *
-   * <p>Minimum size: 16 bytes (no keys, no text)
+   * <p>
+   * Minimum size: 16 bytes (no keys, no text)
    */
   private void handleActionClient(SocketChannel clientSocket) {
     actionExecutor.submit(
@@ -231,8 +236,7 @@ public class NetworkHandler implements Runnable {
               }
 
               // Create and process the RawInput
-              final RawInput rawInput =
-                  new RawInput(keyCodes, mouseDx, mouseDy, mouseButtons, scrollDelta, text);
+              final RawInput rawInput = new RawInput(keyCodes, mouseDx, mouseDy, mouseButtons, scrollDelta, text);
               processRawInput(rawInput);
             }
           } catch (IOException e) {
@@ -256,7 +260,8 @@ public class NetworkHandler implements Runnable {
   }
 
   /**
-   * Reads exactly the buffer's remaining capacity from the socket. Returns -1 if the client
+   * Reads exactly the buffer's remaining capacity from the socket. Returns -1 if
+   * the client
    * disconnects, otherwise returns bytes read.
    */
   private int readExact(SocketChannel channel, ByteBuffer buffer) throws IOException {

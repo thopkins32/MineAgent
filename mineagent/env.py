@@ -74,7 +74,12 @@ class MinecraftEnv(gym.Env):
         return loop.run_until_complete(coro)
 
     async def _launch_minecraft_process(self) -> None:
-        """Launch minecraft in a Python subprocess."""
+        """Launch minecraft in a Python subprocess.
+
+        Stdout/stderr are discarded because the Forge mod already writes full
+        Log4j logs to ``forge/run/logs/latest.log`` (and ``debug.log``);
+        mirroring them here would just duplicate that.
+        """
         if (
             self._minecraft_process is not None
             and self._minecraft_process.returncode is None
@@ -85,7 +90,6 @@ class MinecraftEnv(gym.Env):
             "gradle",
             "runClient",
             cwd=Path.cwd() / "forge",
-            # TODO: To a file instead of DEVNULL
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
             start_new_session=True,
@@ -99,8 +103,7 @@ class MinecraftEnv(gym.Env):
         self._run_async(self._launch_minecraft_process())
 
         if not self._client.connected:
-            if not self._run_async(self._client.connect()):
-                raise RuntimeError("Failed to connect to Minecraft Forge mod")
+            self._run_async(self._client.connect())
 
         self._run_async(self._client.send_action(RawInput.release_all()))
 
@@ -155,6 +158,7 @@ class MinecraftEnv(gym.Env):
     def close(self):
         if self._client.connected:
             self._run_async(self._client.disconnect())
+        self._run_async(self._stop_minecraft_process())
         if self._loop and not self._loop.is_closed():
             self._loop.close()
             self._loop = None

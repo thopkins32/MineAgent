@@ -16,9 +16,7 @@ class ConnectionConfig:
     action_socket: str = "/tmp/mineagent_action.sock"
     frame_width: int = 320
     frame_height: int = 240
-    timeout: float = 30.0
-    max_retries: int = 3
-    retry_delay: float = 1.0
+    timeout: float = 150.0
 
 
 class AsyncMinecraftClient:
@@ -29,6 +27,8 @@ class AsyncMinecraftClient:
     def __init__(self, config: ConnectionConfig | None = None):
         self.config = config or ConnectionConfig()
         self._observation_reader: asyncio.StreamReader | None = None
+        self._observation_writer: asyncio.StreamWriter | None = None
+        self._action_reader: asyncio.StreamReader | None = None
         self._action_writer: asyncio.StreamWriter | None = None
         self._connected: bool = False
         self._logger = logging.getLogger(__name__)
@@ -37,34 +37,40 @@ class AsyncMinecraftClient:
     def connected(self) -> bool:
         return self._connected
 
-    async def connect(self) -> bool:
-        """Establish connection to the Minecraft Forge mod."""
-        for attempt in range(self.config.max_retries):
+    async def connect(self) -> None:
+        """Open both Unix sockets, waiting for the Forge mod to start them.
+
+        The mod creates the socket files asynchronously with this process, so
+        the first attempts fail with FileNotFoundError (no socket yet) or
+        ConnectionRefusedError (file exists but not listening yet). Retry
+        until self.config.timeout elapses.
+
+        Keep both the reader and writer for each socket. open_unix_connection
+        returns a (reader, writer) pair sharing one transport; discarding
+        either half can let the shared transport be reaped, tearing down the
+        socket while the other half is still in use.
+        """
+        (
+            self._observation_reader,
+            self._observation_writer,
+        ) = await self._open_unix_connection(self.config.observation_socket)
+        self._action_reader, self._action_writer = await self._open_unix_connection(
+            self.config.action_socket
+        )
+        self._connected = True
+
+    async def _open_unix_connection(
+        self, path: str
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        loop = asyncio.get_running_loop()
+        end = loop.time() + self.config.timeout
+        while True:
             try:
-                self._observation_reader, _ = await asyncio.open_unix_connection(
-                    self.config.observation_socket
-                )
-                _, self._action_writer = await asyncio.open_unix_connection(
-                    self.config.action_socket
-                )
-                self._connected = True
-                self._logger.info(
-                    "Connected to Minecraft Forge mod - Observation: %s, Action: %s",
-                    self.config.observation_socket,
-                    self.config.action_socket,
-                )
-                return True
-            except OSError as e:
-                self._logger.warning("Connection attempt %d failed: %s", attempt + 1, e)
-                await self._cleanup()
-                if attempt < self.config.max_retries - 1:
-                    await asyncio.sleep(self.config.retry_delay)
-                else:
-                    self._logger.error(
-                        "Failed to connect after %d attempts", self.config.max_retries
-                    )
-                    return False
-        return False
+                return await asyncio.open_unix_connection(path)
+            except (FileNotFoundError, ConnectionRefusedError):
+                if loop.time() >= end:
+                    raise TimeoutError(f"Timed out waiting for socket {path}")
+                await asyncio.sleep(0.1)
 
     async def disconnect(self) -> None:
         """Disconnect from the Minecraft Forge mod."""
@@ -78,7 +84,12 @@ class AsyncMinecraftClient:
             self._action_writer.close()
             await self._action_writer.wait_closed()
             self._action_writer = None
+        if self._observation_writer:
+            self._observation_writer.close()
+            await self._observation_writer.wait_closed()
+            self._observation_writer = None
         self._observation_reader = None
+        self._action_reader = None
 
     async def send_action(self, raw_input: RawInput) -> bool:
         """
@@ -128,12 +139,9 @@ class AsyncMinecraftClient:
 
         try:
             header = await self._observation_reader.readexactly(12)
-        except asyncio.IncompleteReadError as e:
+        except asyncio.IncompleteReadError:
             self._connected = False
-            raise ConnectionError(
-                f"Connection lost while reading observation header: "
-                f"got {len(e.partial)} of 12 bytes"
-            ) from e
+            raise
 
         reward = struct.unpack(">d", header[0:8])[0]
         frame_length = struct.unpack(">I", header[8:12])[0]

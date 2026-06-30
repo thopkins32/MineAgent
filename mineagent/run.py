@@ -44,34 +44,36 @@ def run() -> None:
     env = MinecraftEnv(env_config=env_config)
     agent = AgentV1(config.agent)
 
-    frame, info = env.reset()
-    # event_bus.publish(EnvReset(timestamp=datetime.now(), observation=frame))
-    obs = torch.tensor(frame, dtype=torch.float).unsqueeze(0)
-    plt.imshow(frame)
-    plt.show()
-    total_return = 0.0
-    prev_env_reward = 0.0
-    for _ in range(engine_config.max_steps):
-        action = agent.act(obs, reward=prev_env_reward)
-        next_frame, reward, terminated, truncated, info = env.step(action)
-        prev_env_reward = float(reward)
-        next_obs = torch.tensor(next_frame, dtype=torch.float).unsqueeze(0)
-        # event_bus.publish(
-        #     EnvStep(
-        #         timestamp=datetime.now(),
-        #         observation=obs,
-        #         action=action,
-        #         reward=reward,
-        #         next_observation=next_obs,
-        #     )
-        # )
-        total_return += reward
-        obs = next_obs
-        if terminated or truncated:
-            break
+    try:
+        frame, info = env.reset()
+        # event_bus.publish(EnvReset(timestamp=datetime.now(), observation=frame))
+        obs = torch.tensor(frame, dtype=torch.float).unsqueeze(0)
+        plt.imshow(frame)
+        plt.show()
+        total_return = 0.0
+        prev_env_reward = 0.0
+        for _ in range(engine_config.max_steps):
+            action = agent.act(obs, reward=prev_env_reward)
+            next_frame, reward, terminated, truncated, info = env.step(action)
+            prev_env_reward = float(reward)
+            next_obs = torch.tensor(next_frame, dtype=torch.float).unsqueeze(0)
+            # event_bus.publish(
+            #     EnvStep(
+            #         timestamp=datetime.now(),
+            #         observation=obs,
+            #         action=action,
+            #         reward=reward,
+            #         next_observation=next_obs,
+            #     )
+            # )
+            total_return += reward
+            obs = next_obs
+            if terminated or truncated:
+                break
 
-    env.close()
-    # event_bus.publish(Stop(timestamp=datetime.now(), total_return=total_return))
+    finally:
+        env.close()
+        # event_bus.publish(Stop(timestamp=datetime.now(), total_return=total_return))
 
 
 if __name__ == "__main__":
