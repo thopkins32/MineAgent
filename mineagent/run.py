@@ -1,25 +1,8 @@
-from datetime import datetime
-
 import torch
-import matplotlib.pyplot as plt
 
 from .agent.agent import AgentV1
 from .env import MinecraftEnv, MinecraftEnvConfig
-from .config import get_config, MonitoringConfig
-from .monitoring.event_bus import get_event_bus
-from .monitoring.event import Start
-from .utils import setup_tensorboard
-
-
-def setup_monitoring(config: MonitoringConfig) -> None:
-    event_bus = get_event_bus()
-    if config.enabled:
-        event_bus.enable()
-    else:
-        event_bus.disable()
-
-    if config.tensorboard:
-        setup_tensorboard(config.tensorboard)
+from .config import get_config
 
 
 def run() -> None:
@@ -30,11 +13,6 @@ def run() -> None:
     """
     config = get_config()
     engine_config = config.engine
-    event_bus = get_event_bus()
-    monitoring_config = config.monitoring
-    setup_monitoring(monitoring_config)
-
-    event_bus.publish(Start(timestamp=datetime.now()))
 
     env_config = MinecraftEnvConfig(
         frame_height=engine_config.image_size[0],
@@ -45,27 +23,19 @@ def run() -> None:
     agent = AgentV1(config.agent)
 
     try:
-        frame, info = env.reset()
-        # event_bus.publish(EnvReset(timestamp=datetime.now(), observation=frame))
-        obs = torch.tensor(frame, dtype=torch.float).unsqueeze(0)
-        plt.imshow(frame)
-        plt.show()
+        frame, _ = env.reset()
+        obs = torch.tensor(frame, dtype=torch.float).permute(2, 0, 1).unsqueeze(0)
         total_return = 0.0
         prev_env_reward = 0.0
         for _ in range(engine_config.max_steps):
             action = agent.act(obs, reward=prev_env_reward)
-            next_frame, reward, terminated, truncated, info = env.step(action)
+            next_frame, reward, terminated, truncated, _ = env.step(action)
             prev_env_reward = float(reward)
-            next_obs = torch.tensor(next_frame, dtype=torch.float).unsqueeze(0)
-            # event_bus.publish(
-            #     EnvStep(
-            #         timestamp=datetime.now(),
-            #         observation=obs,
-            #         action=action,
-            #         reward=reward,
-            #         next_observation=next_obs,
-            #     )
-            # )
+            next_obs = (
+                torch.tensor(next_frame, dtype=torch.float)
+                .permute(2, 0, 1)
+                .unsqueeze(0)
+            )
             total_return += reward
             obs = next_obs
             if terminated or truncated:
@@ -73,7 +43,6 @@ def run() -> None:
 
     finally:
         env.close()
-        # event_bus.publish(Stop(timestamp=datetime.now(), total_return=total_return))
 
 
 if __name__ == "__main__":

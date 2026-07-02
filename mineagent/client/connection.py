@@ -170,12 +170,9 @@ class AsyncMinecraftClient:
 
         try:
             frame_data = await self._observation_reader.readexactly(frame_length)
-        except asyncio.IncompleteReadError as e:
+        except asyncio.IncompleteReadError:
             self._connected = False
-            raise ConnectionError(
-                f"Connection lost while reading frame data: "
-                f"got {len(e.partial)} of {frame_length} bytes"
-            ) from e
+            raise
 
         try:
             return parse_observation(

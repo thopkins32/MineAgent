@@ -57,6 +57,21 @@ public class ClientEventHandler {
     boolean isMenu = mc.screen != null;
     boolean inWorldWithOverlay = mc.level != null && mc.screen != null;
 
+    // Check and set window size
+    Window window = mc.getWindow();
+    int targetW = Config.WINDOW_WIDTH.get();
+    int targetH = Config.WINDOW_HEIGHT.get();
+    if (window.getWidth() != targetW || window.getHeight() != targetH) {
+      LOGGER.debug(
+          "Mismatched window size. Target WxH: {}x{}. Active WxH: {}x{}",
+          targetW,
+          targetH,
+          window.getWidth(),
+          window.getHeight());
+      window.setWindowed(targetW, targetH);
+      return;
+    }
+
     if (onTitleScreen || onAccessibilityScreen) {
       String worldName = Config.WORLD_NAME.get();
       if (Config.CREATE_NEW_WORLD.get()) {
@@ -92,8 +107,6 @@ public class ClientEventHandler {
       mc.player.respawn();
       return;
     }
-
-    enforceWindowSize(mc);
 
     handleInputSuppression(mc);
 
@@ -164,15 +177,6 @@ public class ClientEventHandler {
     return entity instanceof LocalPlayer p && p == Minecraft.getInstance().player;
   }
 
-  private static void enforceWindowSize(Minecraft mc) {
-    Window window = mc.getWindow();
-    int targetW = Config.WINDOW_WIDTH.get();
-    int targetH = Config.WINDOW_HEIGHT.get();
-    if (window.getWidth() != targetW || window.getHeight() != targetH) {
-      window.setWindowed(targetW, targetH);
-    }
-  }
-
   private static byte[] captureFrame() {
     Minecraft mc = Minecraft.getInstance();
     return captureScreenshot(mc.getWindow());
@@ -181,6 +185,8 @@ public class ClientEventHandler {
   private static byte[] captureScreenshot(Window window) {
     int width = window.getWidth();
     int height = window.getHeight();
+
+    LOGGER.info("Screenshot width x height: {} x {}", width, height);
 
     ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 3);
     GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 import logging
 from math import floor
 from typing import TYPE_CHECKING
@@ -8,21 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import scipy  # type: ignore
 import torch
-import torch.nn as nn
-from torch.utils.hooks import RemovableHandle
 
-from .monitoring.event import (
-    ModuleForwardEnd,
-    ModuleForwardStart,
-    EnvStep,
-    EnvReset,
-    Action,
-    Start,
-    Stop,
-)
-from .monitoring.event_bus import get_event_bus
-from .monitoring.callbacks.tensorboard import TensorboardWriter
-from .config import TensorboardConfig
 
 if TYPE_CHECKING:
     from .affector.affector import AffectorOutput
@@ -240,108 +225,3 @@ def joint_logp_action(
     joint = joint + mb_dist.log_prob(actions_taken[:, col : col + 3]).sum(dim=-1)
 
     return joint
-
-
-def add_forward_hooks(module: nn.Module, prefix: str = "") -> list[RemovableHandle]:
-    """
-    Add forward hooks to all modules in the model to log their inputs and outputs.
-
-    Parameters
-    ----------
-    module : nn.Module
-        The module to add hooks to, typically the full model
-    prefix : str
-        A prefix to add to module names for better organization
-
-    Returns
-    -------
-    List[torch.utils.hooks.RemovableHandle]
-        List of hook handles that can be used to remove the hooks if needed
-    """
-    event_bus = get_event_bus()
-    handles = []
-
-    def _pre_hook(module_name):
-        def hook(module, inputs):
-            # Convert inputs to a standardized format for logging
-            formatted_inputs = _format_tensors_for_logging(inputs)
-            # Publish event
-            event_bus.publish(
-                ModuleForwardStart(
-                    name=module_name, inputs=formatted_inputs, timestamp=datetime.now()
-                )
-            )
-            return None
-
-        return hook
-
-    def _post_hook(module_name):
-        def hook(module, inputs, outputs):
-            # Convert outputs to a standardized format for logging
-            formatted_outputs = _format_tensors_for_logging(outputs)
-            # Publish event
-            event_bus.publish(
-                ModuleForwardEnd(
-                    name=module_name,
-                    outputs=formatted_outputs,
-                    timestamp=datetime.now(),
-                )
-            )
-            return None
-
-        return hook
-
-    # Add hooks recursively to all modules
-    for name, submodule in module.named_modules():
-        if name == "":  # Skip the root module
-            continue
-
-        full_name = f"{prefix}.{name}" if prefix else name
-        # Register pre-forward hook
-        handles.append(submodule.register_forward_pre_hook(_pre_hook(full_name)))
-        # Register post-forward hook
-        handles.append(submodule.register_forward_hook(_post_hook(full_name)))
-
-    return handles
-
-
-def _format_tensors_for_logging(
-    tensors: torch.Tensor | tuple[torch.Tensor, ...] | list[torch.Tensor],
-) -> dict[str, torch.Tensor]:
-    """
-    Format tensors for logging to make them compatible with the event system and tensorboard.
-
-    Parameters
-    ----------
-    tensors : torch.Tensor | tuple[torch.Tensor, ...] | list[torch.Tensor]
-        Input tensors from forward calls, which can be a single tensor or nested structures
-
-    Returns
-    -------
-    Dict[str, torch.Tensor]
-        Formatted data suitable for logging
-    """
-    result = {}
-
-    # Handle different input types
-    if isinstance(tensors, torch.Tensor):
-        return {"tensor": tensors.detach()}
-
-    # Handle tuple/list of tensors (common for forward inputs)
-    if isinstance(tensors, (tuple, list)):
-        for i, tensor in enumerate(tensors):
-            result[f"tensor_{i}"] = tensor.detach()
-
-    return result
-
-
-def setup_tensorboard(config: TensorboardConfig) -> None:
-    event_bus = get_event_bus()
-    writer = TensorboardWriter(config)
-    event_bus.subscribe(Start, writer.add_start)
-    event_bus.subscribe(Stop, writer.add_stop)
-    event_bus.subscribe(ModuleForwardStart, writer.add_module_forward_start)
-    event_bus.subscribe(ModuleForwardEnd, writer.add_module_forward_end)
-    event_bus.subscribe(EnvStep, writer.add_env_step)
-    event_bus.subscribe(EnvReset, writer.add_env_reset)
-    event_bus.subscribe(Action, writer.add_action)

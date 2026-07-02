@@ -121,60 +121,6 @@ class AgentConfig:
 
 
 @dataclass
-class TensorboardConfig:
-    """
-    Configuration for TensorBoard logging
-
-    Attributes
-    ----------
-    log_dir : str, optional
-        Directory to save TensorBoard logs
-    flush_secs : int, optional
-        How often to flush data to disk (in seconds)
-    """
-
-    log_dir: str = "runs"
-    flush_secs: int = 10
-
-
-@dataclass
-class EventLoggingConfig:
-    """
-    Configuration for event logging
-
-    Attributes
-    ----------
-    module_step_frequency : int, optional
-        Log module forward events every N steps (1 = every step)
-    """
-
-    module_step_frequency: int = 10
-
-
-@dataclass
-class MonitoringConfig:
-    """
-    Configuration for the monitoring system
-
-    Attributes
-    ----------
-    enabled : bool, optional
-        Master switch to enable/disable all monitoring
-    tensorboard : TensorboardConfig, optional
-        Configuration for TensorBoard logging
-    events : EventLoggingConfig, optional
-        Configuration for event logging
-    """
-
-    enabled: bool = True
-    tensorboard: TensorboardConfig | None = field(default_factory=TensorboardConfig)
-    events: EventLoggingConfig = field(default_factory=EventLoggingConfig)
-    # TODO: Add checkpointing
-    # save_checkpoints: bool = True
-    # checkpoint_frequency: int = 1000
-
-
-@dataclass
 class Config:
     """
     Configuration definitions for the full program
@@ -185,13 +131,10 @@ class Config:
         Configuration for the engine
     agent : AgentConfig
         Configuration for the agent
-    monitoring : MonitoringConfig
-        Configuration for the monitoring system
     """
 
     engine: EngineConfig = field(default_factory=EngineConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
-    monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
 
 
 def get_config() -> Config:

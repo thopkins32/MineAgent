@@ -14,7 +14,6 @@ from mineagent.config import (
     EngineConfig,
     AgentConfig,
     Config,
-    MonitoringConfig,
 )
 from tests.helper import CONFIG_PATH
 
@@ -101,7 +100,6 @@ def test_update_config():
             icm=ICMConfig(),
             td=TDConfig(),
         ),
-        monitoring=MonitoringConfig(),
     )
 
     # Other - empty list

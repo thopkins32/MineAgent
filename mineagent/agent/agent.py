@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import numpy as np
 import torch
 from torchvision.transforms.functional import center_crop, crop  # type: ignore
@@ -12,9 +10,7 @@ from ..memory.trajectory import TrajectoryBuffer
 from ..learning.icm import ICM
 from ..learning.ppo import PPO
 from ..config import AgentConfig
-from ..monitoring.event import Action
 from ..utils import sample_action
-from ..monitoring.event_bus import get_event_bus
 from ..client.protocol import (
     NUM_KEYS,
     MOUSE_DX_RANGE,
@@ -47,14 +43,12 @@ class AgentV1:
         self.ppo = PPO(self.affector, self.critic, config.ppo)
         self.icm = ICM(self.forward_dynamics, self.inverse_dynamics, config.icm)
         self.config = config
-        self.monitor_actions = False
 
         # region of interest initialization
         self.roi_action: torch.Tensor | None = None
         self.prev_visual_features: torch.Tensor = torch.zeros(
             (1, self.EMBED_DIM), dtype=torch.float
         )
-        self.event_bus = get_event_bus()
 
     def _transform_observation(self, obs: torch.Tensor) -> torch.Tensor:
         if self.roi_action is None:
@@ -68,22 +62,6 @@ class AgentV1:
                 self.config.roi_shape[1],
             )
         return roi_obs
-
-    def start_monitoring(self) -> None:
-        self.vision.start_monitoring()
-        self.affector.start_monitoring()
-        self.critic.start_monitoring()
-        self.inverse_dynamics.start_monitoring()
-        self.forward_dynamics.start_monitoring()
-        self.monitor_actions = True
-
-    def stop_monitoring(self) -> None:
-        self.vision.stop_monitoring()
-        self.affector.stop_monitoring()
-        self.critic.stop_monitoring()
-        self.inverse_dynamics.stop_monitoring()
-        self.forward_dynamics.stop_monitoring()
-        self.monitor_actions = False
 
     @staticmethod
     def action_tensor_to_env(action: torch.Tensor) -> dict[str, np.ndarray]:
@@ -142,17 +120,4 @@ class AgentV1:
 
         env_action_dict = self.action_tensor_to_env(env_action)
 
-        if self.monitor_actions:
-            self.event_bus.publish(
-                Action(
-                    timestamp=datetime.now(),
-                    visual_features=visual_features,
-                    action_distribution=affector_output,
-                    action=env_action,
-                    logp_action=env_logp,
-                    value=value,
-                    region_of_interest=roi_obs,
-                    intrinsic_reward=intrinsic_reward,
-                )
-            )
         return env_action_dict

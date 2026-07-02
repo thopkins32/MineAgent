@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 
 from ..client.protocol import NUM_KEYS
-from ..utils import add_forward_hooks
 
 
 @dataclass
@@ -61,9 +60,6 @@ class LinearAffector(nn.Module):
 
         self.softplus = nn.Softplus()
 
-        # Monitoring
-        self.start_monitoring()
-
     def forward(self, x: torch.Tensor) -> AffectorOutput:
         return AffectorOutput(
             key_logits=self.key_head(x),
@@ -77,10 +73,3 @@ class LinearAffector(nn.Module):
             focus_means=self.focus_means(x),
             focus_stds=self.softplus(self.focus_logstds(x)),
         )
-
-    def stop_monitoring(self):
-        for hook in self.hooks:
-            hook.remove()
-
-    def start_monitoring(self):
-        self.hooks = add_forward_hooks(self, "Affector")

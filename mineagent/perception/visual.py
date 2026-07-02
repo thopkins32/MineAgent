@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 from torchvision.transforms.functional import rgb_to_grayscale  # type: ignore
 
-from ..utils import add_forward_hooks
-
 
 class VisualPerception(nn.Module):
     """
@@ -57,17 +55,6 @@ class VisualPerception(nn.Module):
 
         return out
 
-    def stop_monitoring(self):
-        if not self.hooks:
-            return
-        for hook in self.hooks:
-            hook.remove()
-
-    def start_monitoring(self):
-        self.foveated_perception.start_monitoring()
-        self.peripheral_perception.start_monitoring()
-        self.hooks = add_forward_hooks(self, "VisualPerception")
-
 
 class FoveatedPerception(nn.Module):
     """
@@ -112,13 +99,6 @@ class FoveatedPerception(nn.Module):
         x = self.gelu(self.mp3(self.conv3(x)))
         return self.flatten(x)
 
-    def stop_monitoring(self):
-        for hook in self.hooks:
-            hook.remove()
-
-    def start_monitoring(self):
-        self.hooks = add_forward_hooks(self, "FoveatedPerception")
-
 
 class PeripheralPerception(nn.Module):
     """
@@ -157,10 +137,3 @@ class PeripheralPerception(nn.Module):
         x = self.gelu(self.mp1(self.conv1(x_img)))
         x = self.gelu(self.mp2(self.conv2(x)))
         return self.flatten(x)
-
-    def stop_monitoring(self):
-        for hook in self.hooks:
-            hook.remove()
-
-    def start_monitoring(self):
-        self.hooks = add_forward_hooks(self, "PeripheralPerception")

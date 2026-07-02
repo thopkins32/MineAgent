@@ -120,7 +120,6 @@ class MinecraftEnv(gym.Env):
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         raw_input = action_to_raw_input(action)
         self._run_async(self._client.send_action(raw_input))
-
         obs = self._run_async(self._client.receive_observation())
         frame = obs.frame
         reward = obs.reward
