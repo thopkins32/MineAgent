@@ -111,9 +111,10 @@ class AgentV1:
             focus_logp=focus_logp,
         )
 
-        if len(self.memory) == self.config.max_buffer_size:
-            self.ppo.update(self.memory)
-            self.icm.update(self.memory)
+        # FIXME: broken from dim mismatch somewhere, somehow
+        # if len(self.memory) == self.config.max_buffer_size:
+        #     self.ppo.update(self.memory)
+        #     self.icm.update(self.memory)
 
         self.prev_visual_features = visual_features
         self.roi_action = focus_action.round().long()
