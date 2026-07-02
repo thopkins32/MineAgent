@@ -20,7 +20,7 @@ class EngineConfig:
         Total number of environment steps before program termination
     """
 
-    image_size: tuple[int, int] = (160, 256)
+    image_size: tuple[int, int] = (240, 320)
     max_steps: int = 10_000
 
 
