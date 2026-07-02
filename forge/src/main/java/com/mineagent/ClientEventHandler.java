@@ -27,10 +27,7 @@ import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.slf4j.Logger;
 
-/**
- * Handles client-side game events and coordinates input injection with
- * observations.
- */
+/** Handles client-side game events and coordinates input injection with observations. */
 public class ClientEventHandler {
   private static final Logger LOGGER = LogUtils.getLogger();
   private static final DataBridge dataBridge = DataBridge.getInstance();
@@ -119,8 +116,7 @@ public class ClientEventHandler {
   }
 
   /**
-   * Handles input suppression when a Python client is connected. Disables the
-   * system cursor to
+   * Handles input suppression when a Python client is connected. Disables the system cursor to
    * prevent real mouse input from interfering.
    */
   private static void handleInputSuppression(Minecraft mc) {
@@ -163,9 +159,7 @@ public class ClientEventHandler {
     }
   }
 
-  /**
-   * The player the agent controls on this machine (not other players or mobs).
-   */
+  /** The player the agent controls on this machine (not other players or mobs). */
   private static boolean isClientControlledPlayer(LivingEntity entity) {
     return entity instanceof LocalPlayer p && p == Minecraft.getInstance().player;
   }

@@ -21,13 +21,21 @@ repos:
         entry: ruff format
         types: [python]
         require_serial: true
-    
+
+      - id: spotlessApply
+        name: format with spotless
+        language: system
+        entry: bash -c 'cd forge && gradle :spotlessApply'
+        pass_filenames: false
+        types: [java]
+
       - id: pyright
         name: type check with pyright
         language: system
         entry: pyright
         types: [python]
         require_serial: true
+
 
 #  # Java hooks
 #  - repo: https://github.com/gherynos/pre-commit-java
