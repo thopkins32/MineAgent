@@ -35,15 +35,3 @@ repos:
         entry: pyright
         types: [python]
         require_serial: true
-
-
-#  # Java hooks
-#  - repo: https://github.com/gherynos/pre-commit-java
-#    rev: v0.6.17
-#    hooks:
-#      - id: pmd
-#        files: forge/.*\.java$
-#      - id: cpd
-#        files: forge/.*\.java$
-#      - id: checkstyle
-#        files: forge/.*\.java$
