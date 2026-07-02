@@ -186,8 +186,6 @@ public class ClientEventHandler {
     int width = window.getWidth();
     int height = window.getHeight();
 
-    LOGGER.info("Screenshot width x height: {} x {}", width, height);
-
     ByteBuffer buffer = ByteBuffer.allocateDirect(width * height * 3);
     GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
 
