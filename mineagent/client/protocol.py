@@ -2,6 +2,7 @@ import struct
 from dataclasses import dataclass, field
 
 import numpy as np
+from gymnasium import spaces
 
 
 class GLFW:
@@ -182,33 +183,8 @@ KEY_LIST: list[int] = [
     GLFW.KEY_ENTER,  # 20
     GLFW.KEY_TAB,  # 21
     GLFW.KEY_BACKSPACE,  # 22
-    # Chat
-    GLFW.KEY_T,  # 23: open chat
-    GLFW.KEY_SLASH,  # 24: open command
-    # Letters (for typing in chat/signs/etc.)
-    GLFW.KEY_B,  # 25
-    GLFW.KEY_C,  # 26
-    GLFW.KEY_G,  # 27
-    GLFW.KEY_H,  # 28
-    GLFW.KEY_I,  # 29
-    GLFW.KEY_J,  # 30
-    GLFW.KEY_K,  # 31
-    GLFW.KEY_L,  # 32
-    GLFW.KEY_M,  # 33
-    GLFW.KEY_N,  # 34
-    GLFW.KEY_O,  # 35
-    GLFW.KEY_P,  # 36
-    GLFW.KEY_R,  # 37
-    GLFW.KEY_U,  # 38
-    GLFW.KEY_V,  # 39
-    GLFW.KEY_X,  # 40
-    GLFW.KEY_Y,  # 41
-    GLFW.KEY_Z,  # 42
     # Debug
-    GLFW.KEY_F1,  # 43
-    GLFW.KEY_F2,  # 44
     GLFW.KEY_F3,  # 45
-    GLFW.KEY_F5,  # 46
 ]
 
 NUM_KEYS: int = len(KEY_LIST)
@@ -352,7 +328,6 @@ SCROLL_RANGE = (-10.0, 10.0)
 
 def make_action_space():
     """Build the Gymnasium Dict action space that mirrors RawInput."""
-    from gymnasium import spaces
 
     return spaces.Dict(
         {
