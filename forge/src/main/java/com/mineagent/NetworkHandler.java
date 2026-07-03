@@ -1,6 +1,7 @@
 package com.mineagent;
 
 import com.mojang.logging.LogUtils;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.StandardSocketOptions;
@@ -162,13 +163,12 @@ public class NetworkHandler implements Runnable {
   }
 
   /**
-   * Handles an action client connection, reading variable-size RawInput messages.
+   * Handles an action client connection, reading variable-size v2 ActionMessage frames.
    *
-   * <p>RawInput protocol format: - 1 byte: numKeysPressed (0-255) - N*2 bytes: keyCodes (shorts) -
-   * 4 bytes: mouseDeltaX (float) - 4 bytes: mouseDeltaY (float) - 1 byte: mouseButtons - 4 bytes:
-   * scrollDelta (float) - 2 bytes: textLength - M bytes: textBytes (UTF-8)
-   *
-   * <p>Minimum size: 16 bytes (no keys, no text)
+   * <p>Each message starts with a 1-byte flags header (message type + presence bits for keys /
+   * mouse / buttons / scroll). The body that follows depends on which flags are set; sections are
+   * read in the fixed order keys -> mouse -> buttons -> scroll, then TEXT body for TEXT messages.
+   * RESET and PING carry no body.
    */
   private void handleActionClient(SocketChannel clientSocket) {
     actionExecutor.submit(
@@ -176,64 +176,61 @@ public class NetworkHandler implements Runnable {
           try {
             clientSocket.configureBlocking(true);
 
-            // Buffer for reading the header (1 byte for key count)
-            ByteBuffer headerBuffer = ByteBuffer.allocate(1);
-
             while (this.running.get()) {
-              // Step 1: Read the key count (1 byte)
-              headerBuffer.clear();
-              if (readExact(clientSocket, headerBuffer) == -1) {
+              // Step 1: read the 1-byte flags header.
+              ByteBuffer flagBuffer = ByteBuffer.allocate(1);
+              if (readExact(clientSocket, flagBuffer) == -1) {
                 LOGGER.info("Action client disconnected");
                 break;
               }
-              headerBuffer.flip();
-              int numKeys = headerBuffer.get() & 0xFF;
+              flagBuffer.flip();
+              int flags = flagBuffer.get() & 0xFF;
 
-              // Step 2: Calculate remaining message size
-              // keyCodes(N*2) + mouseDx(4) + mouseDy(4) + mouseButtons(1) + scrollDelta(4) +
-              // textLen(2)
-              int fixedSize = (numKeys * 2) + 4 + 4 + 1 + 4 + 2;
-              ByteBuffer fixedBuffer = ByteBuffer.allocate(fixedSize);
-
-              if (readExact(clientSocket, fixedBuffer) == -1) {
-                LOGGER.info("Action client disconnected during fixed read");
+              if ((flags & ActionMessage.FLAG_MASK_RESERVED) != 0) {
+                LOGGER.warn(
+                    "Invalid action message: reserved flag bits set ({}); closing stream",
+                    Integer.toHexString(flags));
                 break;
               }
-              fixedBuffer.flip();
+              int msgType = flags & 0x3;
 
-              // Read key codes
-              int[] keyCodes = new int[numKeys];
-              for (int i = 0; i < numKeys; i++) {
-                keyCodes[i] = fixedBuffer.getShort();
-              }
+              // Step 2: read the variable body, accumulating the full message so
+              // ActionMessage.fromBytes can parse it in one place.
+              ByteArrayOutputStream acc = new ByteArrayOutputStream();
+              acc.write(flags);
 
-              // Read mouse and scroll data
-              float mouseDx = fixedBuffer.getFloat();
-              float mouseDy = fixedBuffer.getFloat();
-              byte mouseButtons = fixedBuffer.get();
-              float scrollDelta = fixedBuffer.getFloat();
-
-              // Read text length
-              int textLength = fixedBuffer.getShort() & 0xFFFF;
-
-              // Step 3: Read text if present
-              String text = "";
-              if (textLength > 0) {
-                ByteBuffer textBuffer = ByteBuffer.allocate(textLength);
-                if (readExact(clientSocket, textBuffer) == -1) {
-                  LOGGER.info("Action client disconnected during text read");
+              if (msgType == ActionMessage.MSG_TYPE_ACTION) {
+                if ((flags & ActionMessage.FLAG_HAS_KEYS) != 0
+                    && !readKeysSection(clientSocket, acc)) {
                   break;
                 }
-                textBuffer.flip();
-                byte[] textBytes = new byte[textLength];
-                textBuffer.get(textBytes);
-                text = new String(textBytes, java.nio.charset.StandardCharsets.UTF_8);
+                if ((flags & ActionMessage.FLAG_HAS_MOUSE) != 0
+                    && !readFixed(clientSocket, acc, 8)) {
+                  break;
+                }
+                if ((flags & ActionMessage.FLAG_HAS_BUTTONS) != 0
+                    && !readFixed(clientSocket, acc, 1)) {
+                  break;
+                }
+                if ((flags & ActionMessage.FLAG_HAS_SCROLL) != 0
+                    && !readFixed(clientSocket, acc, 4)) {
+                  break;
+                }
+              } else if (msgType == ActionMessage.MSG_TYPE_TEXT) {
+                if (!readTextSection(clientSocket, acc)) {
+                  break;
+                }
               }
+              // RESET / PING: no body.
 
-              // Create and process the RawInput
-              final RawInput rawInput =
-                  new RawInput(keyCodes, mouseDx, mouseDy, mouseButtons, scrollDelta, text);
-              processRawInput(rawInput);
+              ActionMessage message;
+              try {
+                message = ActionMessage.fromBytes(acc.toByteArray());
+              } catch (IllegalArgumentException e) {
+                LOGGER.warn("Malformed action message: {}", e.getMessage());
+                continue;
+              }
+              processAction(message);
             }
           } catch (IOException e) {
             if (this.running.get()) {
@@ -256,6 +253,63 @@ public class NetworkHandler implements Runnable {
   }
 
   /**
+   * Reads the keys section (u8 numPress, u8 numRelease, then the press and release key codes) and
+   * appends it to {@code acc}. Returns false on disconnect.
+   */
+  private boolean readKeysSection(SocketChannel channel, ByteArrayOutputStream acc)
+      throws IOException {
+    ByteBuffer counts = ByteBuffer.allocate(2);
+    if (readExact(channel, counts) == -1) {
+      return false;
+    }
+    counts.flip();
+    int numPress = counts.get() & 0xFF;
+    int numRelease = counts.get() & 0xFF;
+    acc.write(counts.array(), 0, 2);
+
+    int keysBytes = (numPress + numRelease) * 2;
+    ByteBuffer keys = ByteBuffer.allocate(keysBytes);
+    if (readExact(channel, keys) == -1) {
+      return false;
+    }
+    keys.flip();
+    acc.write(keys.array(), 0, keysBytes);
+    return true;
+  }
+
+  /** Reads the TEXT section (u16 length + UTF-8 bytes) and appends it to {@code acc}. */
+  private boolean readTextSection(SocketChannel channel, ByteArrayOutputStream acc)
+      throws IOException {
+    ByteBuffer lenBuf = ByteBuffer.allocate(2);
+    if (readExact(channel, lenBuf) == -1) {
+      return false;
+    }
+    lenBuf.flip();
+    int textLen = lenBuf.getShort() & 0xFFFF;
+    acc.write(lenBuf.array(), 0, 2);
+
+    ByteBuffer textBuf = ByteBuffer.allocate(textLen);
+    if (readExact(channel, textBuf) == -1) {
+      return false;
+    }
+    textBuf.flip();
+    acc.write(textBuf.array(), 0, textLen);
+    return true;
+  }
+
+  /** Reads {@code size} bytes and appends them to {@code acc}. Returns false on disconnect. */
+  private boolean readFixed(SocketChannel channel, ByteArrayOutputStream acc, int size)
+      throws IOException {
+    ByteBuffer buf = ByteBuffer.allocate(size);
+    if (readExact(channel, buf) == -1) {
+      return false;
+    }
+    buf.flip();
+    acc.write(buf.array(), 0, size);
+    return true;
+  }
+
+  /**
    * Reads exactly the buffer's remaining capacity from the socket. Returns -1 if the client
    * disconnects, otherwise returns bytes read.
    */
@@ -271,17 +325,28 @@ public class NetworkHandler implements Runnable {
     return totalRead;
   }
 
-  /** Processes a received RawInput by passing it to the DataBridge. */
-  private void processRawInput(RawInput rawInput) {
-    DataBridge.getInstance().setLatestRawInput(rawInput);
+  /**
+   * Routes a parsed ActionMessage. ACTION / TEXT / RESET are queued through DataBridge so they are
+   * applied on the client tick thread; PING is a liveness heartbeat and is dropped here.
+   */
+  private void processAction(ActionMessage message) {
+    if (message.msgType() == ActionMessage.MSG_TYPE_PING) {
+      LOGGER.debug("PING received");
+      return;
+    }
+    DataBridge.getInstance().setLatestAction(message);
     LOGGER.debug(
-        "RawInput received: {} keys, mouse=({}, {}), buttons={}, scroll={}, text='{}'",
-        rawInput.keyCodes().length,
-        rawInput.mouseDx(),
-        rawInput.mouseDy(),
-        rawInput.mouseButtons(),
-        rawInput.scrollDelta(),
-        rawInput.text());
+        "ActionMessage received: type={}, press={}, release={}, mouse=({},{}), "
+            + "buttons p={}/r={}, scroll={}, text='{}'",
+        message.msgType(),
+        message.keyPress().length,
+        message.keyRelease().length,
+        message.mouseDx(),
+        message.mouseDy(),
+        message.buttonPress(),
+        message.buttonRelease(),
+        message.scroll(),
+        message.text());
   }
 
   private void handleObservationClient(SocketChannel clientSocket) {

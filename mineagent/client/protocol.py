@@ -184,87 +184,12 @@ KEY_LIST: list[int] = [
     GLFW.KEY_TAB,  # 21
     GLFW.KEY_BACKSPACE,  # 22
     # Debug
-    GLFW.KEY_F3,  # 45
+    GLFW.KEY_F3,  # 23
 ]
 
 NUM_KEYS: int = len(KEY_LIST)
 
 KEY_TO_INDEX: dict[int, int] = {code: idx for idx, code in enumerate(KEY_LIST)}
-
-
-@dataclass
-class RawInput:
-    """
-    Raw input data to send to Minecraft.
-
-    Protocol format (variable size):
-    - 1 byte: numKeysPressed (0-255)
-    - N*2 bytes: keyCodes (shorts, big-endian)
-    - 4 bytes: mouseDeltaX (float, big-endian)
-    - 4 bytes: mouseDeltaY (float, big-endian)
-    - 1 byte: mouseButtons (bits: 0=left, 1=right, 2=middle)
-    - 4 bytes: scrollDelta (float, big-endian)
-    - 2 bytes: textLength (big-endian)
-    - M bytes: textBytes (UTF-8)
-    """
-
-    key_codes: list[int] = field(default_factory=list)
-    mouse_dx: float = 0.0
-    mouse_dy: float = 0.0
-    mouse_buttons: int = 0
-    scroll_delta: float = 0.0
-    text: str = ""
-
-    def to_bytes(self) -> bytes:
-        """Serialize to binary protocol format."""
-        data = bytearray()
-
-        num_keys = len(self.key_codes)
-        if num_keys > 255:
-            raise ValueError(f"Too many keys pressed: {num_keys} (max 255)")
-        data.append(num_keys)
-
-        for key_code in self.key_codes:
-            data.extend(struct.pack(">h", key_code))
-
-        data.extend(struct.pack(">f", self.mouse_dx))
-        data.extend(struct.pack(">f", self.mouse_dy))
-
-        data.append(self.mouse_buttons & 0xFF)
-
-        data.extend(struct.pack(">f", self.scroll_delta))
-
-        text_bytes = self.text.encode("utf-8")
-        text_length = len(text_bytes)
-        if text_length > 65535:
-            raise ValueError(f"Text too long: {text_length} bytes (max 65535)")
-        data.extend(struct.pack(">H", text_length))
-        data.extend(text_bytes)
-
-        return bytes(data)
-
-    def set_left_mouse(self, pressed: bool) -> None:
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_LEFT
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_LEFT)
-
-    def set_right_mouse(self, pressed: bool) -> None:
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_RIGHT
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_RIGHT)
-
-    def set_middle_mouse(self, pressed: bool) -> None:
-        if pressed:
-            self.mouse_buttons |= 1 << GLFW.MOUSE_BUTTON_MIDDLE
-        else:
-            self.mouse_buttons &= ~(1 << GLFW.MOUSE_BUTTON_MIDDLE)
-
-    @staticmethod
-    def release_all() -> "RawInput":
-        """Create an empty input that releases all keys and mouse buttons."""
-        return RawInput()
 
 
 @dataclass
@@ -318,7 +243,7 @@ def parse_observation(
 
 
 # ---------------------------------------------------------------------------
-# Action space helpers
+# Action space helpers (agent-facing, absolute state)
 # ---------------------------------------------------------------------------
 
 MOUSE_DX_RANGE = (-180.0, 180.0)
@@ -327,7 +252,13 @@ SCROLL_RANGE = (-10.0, 10.0)
 
 
 def make_action_space():
-    """Build the Gymnasium Dict action space that mirrors RawInput."""
+    """Build the Gymnasium Dict action space the agent samples from.
+
+    This is absolute-state: ``keys`` and ``mouse_buttons`` are binary vectors
+    describing the *desired held state* for the tick. ``MinecraftEnv`` diffs
+    this against its held-state register and emits an event-based
+    ``ActionMessage`` on the wire (see :func:`held_state_diff`).
+    """
 
     return spaces.Dict(
         {
@@ -340,69 +271,261 @@ def make_action_space():
     )
 
 
-def action_to_raw_input(action: dict[str, np.ndarray]) -> RawInput:
+# ---------------------------------------------------------------------------
+# v2 event-based wire protocol (ActionMessage)
+# ---------------------------------------------------------------------------
+
+# Message types (low 2 bits of the flags byte).
+MSG_TYPE_ACTION = 0
+MSG_TYPE_RESET = 1
+MSG_TYPE_TEXT = 2
+MSG_TYPE_PING = 3
+
+# Flag-bit positions within the 1-byte header (only meaningful for ACTION).
+FLAG_HAS_KEYS = 1 << 2
+FLAG_HAS_MOUSE = 1 << 3
+FLAG_HAS_BUTTONS = 1 << 4
+FLAG_HAS_SCROLL = 1 << 5
+FLAG_MASK_RESERVED = 0xC0
+
+
+@dataclass
+class ActionMessage:
     """
-    Convert a Dict-space action sample into a RawInput for the wire protocol.
+    Event-based action message sent to the Forge mod.
+
+    Wire format (big-endian):
+
+    - 1 byte ``flags``:
+        - bits 0-1: message type (ACTION / RESET / TEXT / PING)
+        - bit 2: has key events
+        - bit 3: has mouse move
+        - bit 4: has button events
+        - bit 5: has scroll
+        - bits 6-7: reserved (must be 0)
+    - key events (if bit 2): ``u8 numPress``, ``u8 numRelease``,
+      ``numPress`` x ``i16`` key codes to PRESS, ``numRelease`` x ``i16`` key
+      codes to RELEASE. Keys in neither list are HOLD.
+    - mouse move (if bit 3): ``f32 dx``, ``f32 dy``.
+    - button events (if bit 4): 1 byte, low 3 bits = buttons to PRESS,
+      next 3 bits = buttons to RELEASE. Buttons in neither nibble are HOLD.
+    - scroll (if bit 5): ``f32 delta``.
+    - TEXT body: ``u16`` UTF-8 length + bytes (its own message type).
+    - RESET / PING: no body.
+
+    ``key_press``/``key_release`` hold GLFW key codes (see :data:`KEY_LIST`).
+    ``button_press``/``button_release`` are 3-bit masks where bit 0 = left,
+    bit 1 = right, bit 2 = middle (matching :class:`GLFW` MOUSE_BUTTON_*).
+    """
+
+    msg_type: int = MSG_TYPE_ACTION
+    key_press: list[int] = field(default_factory=list)
+    key_release: list[int] = field(default_factory=list)
+    has_mouse: bool = False
+    mouse_dx: float = 0.0
+    mouse_dy: float = 0.0
+    has_buttons: bool = False
+    button_press: int = 0
+    button_release: int = 0
+    has_scroll: bool = False
+    scroll: float = 0.0
+    text: str = ""
+
+    def _validate(self) -> None:
+        if self.msg_type & ~0x3:
+            raise ValueError(f"msg_type must fit in 2 bits, got {self.msg_type}")
+        if self.button_press & ~0x7:
+            raise ValueError(
+                f"button_press must be 3 bits, got {self.button_press}"
+            )
+        if self.button_release & ~0x7:
+            raise ValueError(
+                f"button_release must be 3 bits, got {self.button_release}"
+            )
+        if self.button_press & self.button_release:
+            raise ValueError(
+                "a button may not be in both press and release nibbles"
+            )
+        if len(self.key_press) > 255:
+            raise ValueError(
+                f"Too many press keys: {len(self.key_press)} (max 255)"
+            )
+        if len(self.key_release) > 255:
+            raise ValueError(
+                f"Too many release keys: {len(self.key_release)} (max 255)"
+            )
+        press_set = set(self.key_press)
+        release_set = set(self.key_release)
+        overlap = press_set & release_set
+        if overlap:
+            raise ValueError(
+                f"keys may not be in both press and release lists: {sorted(overlap)}"
+            )
+        if self.msg_type == MSG_TYPE_TEXT:
+            text_bytes = self.text.encode("utf-8")
+            if len(text_bytes) > 65535:
+                raise ValueError(
+                    f"Text too long: {len(text_bytes)} bytes (max 65535)"
+                )
+
+    def to_bytes(self) -> bytes:
+        """Serialize to the v2 wire format."""
+        self._validate()
+
+        flags = self.msg_type & 0x3
+        if self.msg_type == MSG_TYPE_ACTION:
+            has_keys = bool(self.key_press or self.key_release)
+            if has_keys:
+                flags |= FLAG_HAS_KEYS
+            if self.has_mouse:
+                flags |= FLAG_HAS_MOUSE
+            if self.has_buttons:
+                flags |= FLAG_HAS_BUTTONS
+            if self.has_scroll:
+                flags |= FLAG_HAS_SCROLL
+
+        data = bytearray()
+        data.append(flags)
+
+        if self.msg_type == MSG_TYPE_ACTION:
+            if flags & FLAG_HAS_KEYS:
+                data.append(len(self.key_press))
+                data.append(len(self.key_release))
+                for code in self.key_press:
+                    data.extend(struct.pack(">h", code))
+                for code in self.key_release:
+                    data.extend(struct.pack(">h", code))
+            if flags & FLAG_HAS_MOUSE:
+                data.extend(struct.pack(">f", self.mouse_dx))
+                data.extend(struct.pack(">f", self.mouse_dy))
+            if flags & FLAG_HAS_BUTTONS:
+                data.append(
+                    (self.button_press & 0x7)
+                    | ((self.button_release & 0x7) << 3)
+                )
+            if flags & FLAG_HAS_SCROLL:
+                data.extend(struct.pack(">f", self.scroll))
+        elif self.msg_type == MSG_TYPE_TEXT:
+            text_bytes = self.text.encode("utf-8")
+            data.extend(struct.pack(">H", len(text_bytes)))
+            data.extend(text_bytes)
+        # RESET and PING carry no body.
+
+        return bytes(data)
+
+    @staticmethod
+    def reset() -> "ActionMessage":
+        """A RESET message: clears all held key/button state on Java."""
+        return ActionMessage(msg_type=MSG_TYPE_RESET)
+
+    @staticmethod
+    def ping() -> "ActionMessage":
+        """A PING heartbeat message (no body)."""
+        return ActionMessage(msg_type=MSG_TYPE_PING)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "ActionMessage":
+        """Parse a v2 wire message. Primarily for tests / replay."""
+        if len(data) < 1:
+            raise ValueError("Empty action message")
+        flags = data[0]
+        if flags & FLAG_MASK_RESERVED:
+            raise ValueError(f"Reserved flag bits set: {flags:#04x}")
+        msg_type = flags & 0x3
+
+        cur = 1
+        msg = ActionMessage(msg_type=msg_type)
+
+        if msg_type == MSG_TYPE_ACTION:
+            if flags & FLAG_HAS_KEYS:
+                num_press, num_release = data[cur], data[cur + 1]
+                cur += 2
+                msg.key_press = list(
+                    struct.unpack_from(f">{num_press}h", data, cur)
+                )
+                cur += num_press * 2
+                msg.key_release = list(
+                    struct.unpack_from(f">{num_release}h", data, cur)
+                )
+                cur += num_release * 2
+            if flags & FLAG_HAS_MOUSE:
+                msg.mouse_dx, msg.mouse_dy = struct.unpack_from(">ff", data, cur)
+                msg.has_mouse = True
+                cur += 8
+            if flags & FLAG_HAS_BUTTONS:
+                byte = data[cur]
+                cur += 1
+                msg.button_press = byte & 0x7
+                msg.button_release = (byte >> 3) & 0x7
+                msg.has_buttons = True
+            if flags & FLAG_HAS_SCROLL:
+                (msg.scroll,) = struct.unpack_from(">f", data, cur)
+                msg.has_scroll = True
+                cur += 4
+        elif msg_type == MSG_TYPE_TEXT:
+            (text_len,) = struct.unpack_from(">H", data, cur)
+            cur += 2
+            msg.text = data[cur : cur + text_len].decode("utf-8")
+            cur += text_len
+        # RESET / PING: no body.
+
+        if cur != len(data):
+            raise ValueError(
+                f"Trailing bytes: consumed {cur} of {len(data)}"
+            )
+        return msg
+
+
+def held_state_diff(
+    prev_keys: np.ndarray,
+    new_keys: np.ndarray,
+    prev_buttons: np.ndarray,
+    new_buttons: np.ndarray,
+) -> tuple[list[int], list[int], int, int]:
+    """
+    Compute PRESS/RELEASE edges between two absolute held states.
 
     Parameters
     ----------
-    action : dict[str, np.ndarray]
-        A sample from the action space returned by ``make_action_space()``.
+    prev_keys, new_keys : np.ndarray
+        int8 vectors of length ``NUM_KEYS`` (1 = held). The diff is taken
+        ``new_keys - prev_keys``: a 0->1 transition is PRESS, 1->0 is RELEASE.
+    prev_buttons, new_buttons : np.ndarray
+        int8 vectors of length 3 (left, right, middle), same semantics.
 
     Returns
     -------
-    RawInput
-        Ready to serialize with ``to_bytes()`` and send to the Forge mod.
+    (key_press, key_release, button_press, button_release)
+        ``key_*`` are lists of GLFW key codes from :data:`KEY_LIST`;
+        ``button_*`` are 3-bit masks (bit 0 = left, 1 = right, 2 = middle).
     """
-    keys_vec = np.asarray(action["keys"], dtype=np.int8).ravel()
-    key_codes = [KEY_LIST[i] for i, pressed in enumerate(keys_vec) if pressed]
+    prev_keys = np.asarray(prev_keys, dtype=np.int8).ravel()
+    new_keys = np.asarray(new_keys, dtype=np.int8).ravel()
+    prev_buttons = np.asarray(prev_buttons, dtype=np.int8).ravel()
+    new_buttons = np.asarray(new_buttons, dtype=np.int8).ravel()
 
-    mouse_buttons_vec = np.asarray(action["mouse_buttons"], dtype=np.int8).ravel()
-    mouse_buttons = 0
-    for bit, pressed in enumerate(mouse_buttons_vec):
-        if pressed:
-            mouse_buttons |= 1 << bit
+    if prev_keys.shape != (NUM_KEYS,) or new_keys.shape != (NUM_KEYS,):
+        raise ValueError(
+            f"keys vectors must have shape ({NUM_KEYS},), got "
+            f"{prev_keys.shape} and {new_keys.shape}"
+        )
+    if prev_buttons.shape != (3,) or new_buttons.shape != (3,):
+        raise ValueError(
+            f"buttons vectors must have shape (3,), got "
+            f"{prev_buttons.shape} and {new_buttons.shape}"
+        )
 
-    return RawInput(
-        key_codes=key_codes,
-        mouse_dx=float(action["mouse_dx"]),
-        mouse_dy=float(action["mouse_dy"]),
-        mouse_buttons=mouse_buttons,
-        scroll_delta=float(action["scroll_delta"]),
-    )
+    press_idx = np.where((new_keys == 1) & (prev_keys == 0))[0]
+    release_idx = np.where((new_keys == 0) & (prev_keys == 1))[0]
+    key_press = [KEY_LIST[i] for i in press_idx]
+    key_release = [KEY_LIST[i] for i in release_idx]
 
-
-def raw_input_to_action(raw_input: RawInput) -> dict[str, np.ndarray]:
-    """
-    Convert a RawInput back into a Dict-space action sample.
-
-    Useful for imitation learning or replaying recorded human input.
-
-    Parameters
-    ----------
-    raw_input : RawInput
-        The raw input to convert.
-
-    Returns
-    -------
-    dict[str, np.ndarray]
-        A valid sample for the action space returned by ``make_action_space()``.
-    """
-    keys = np.zeros(NUM_KEYS, dtype=np.int8)
-    for code in raw_input.key_codes:
-        idx = KEY_TO_INDEX.get(code)
-        if idx is not None:
-            keys[idx] = 1
-
-    mouse_buttons = np.zeros(3, dtype=np.int8)
+    button_press = 0
+    button_release = 0
     for bit in range(3):
-        if raw_input.mouse_buttons & (1 << bit):
-            mouse_buttons[bit] = 1
+        if new_buttons[bit] == 1 and prev_buttons[bit] == 0:
+            button_press |= 1 << bit
+        elif new_buttons[bit] == 0 and prev_buttons[bit] == 1:
+            button_release |= 1 << bit
 
-    return {
-        "keys": keys,
-        "mouse_dx": np.array(raw_input.mouse_dx, dtype=np.float32),
-        "mouse_dy": np.array(raw_input.mouse_dy, dtype=np.float32),
-        "mouse_buttons": mouse_buttons,
-        "scroll_delta": np.array(raw_input.scroll_delta, dtype=np.float32),
-    }
+    return key_press, key_release, button_press, button_release

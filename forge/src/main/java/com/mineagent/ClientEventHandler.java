@@ -110,10 +110,15 @@ public class ClientEventHandler {
 
     handleInputSuppression(mc);
 
-    // Process any pending raw input
-    final RawInput rawInput = dataBridge.getLatestRawInput();
-    if (rawInput != null) {
-      dataBridge.getInputInjector().inject(rawInput);
+    // Process any pending action message.
+    final ActionMessage message = dataBridge.getLatestAction();
+    if (message != null) {
+      if (message.msgType() == ActionMessage.MSG_TYPE_RESET) {
+        // RESET: clear all held key/button state on the tick thread.
+        dataBridge.getInputInjector().reset();
+      } else {
+        dataBridge.getInputInjector().inject(message);
+      }
     }
 
     // IMPORTANT: Maintain button state every tick for continuous actions

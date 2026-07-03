@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .protocol import Observation, RawInput, parse_observation
+from .protocol import ActionMessage, Observation, parse_observation
 
 
 @dataclass
@@ -91,14 +91,14 @@ class AsyncMinecraftClient:
         self._observation_reader = None
         self._action_reader = None
 
-    async def send_action(self, raw_input: RawInput) -> bool:
+    async def send_action(self, message: ActionMessage) -> bool:
         """
-        Send a raw input action to the Minecraft Forge mod.
+        Send an action message to the Minecraft Forge mod.
 
         Parameters
         ----------
-        raw_input : RawInput
-            The input to send
+        message : ActionMessage
+            The v2 event-based action message to send
 
         Returns
         -------
@@ -110,7 +110,7 @@ class AsyncMinecraftClient:
             return False
 
         try:
-            data = raw_input.to_bytes()
+            data = message.to_bytes()
             self._action_writer.write(data)
             await self._action_writer.drain()
             return True

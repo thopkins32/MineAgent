@@ -11,9 +11,13 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 /**
- * Injects raw input events directly into Minecraft's GLFW callback handlers. This provides a
- * unified architecture where both keyboard and mouse input go through the same handlers that real
- * hardware input uses.
+ * Injects input events directly into Minecraft's GLFW callback handlers.
+ *
+ * <p>The v2 protocol is edge-based: {@link ActionMessage} carries PRESS / RELEASE edges for keys
+ * and mouse buttons, and anything not listed is HOLD. This injector maintains the held key set and
+ * held mouse-button bitmask, applies edges by firing {@code GLFW_PRESS} / {@code GLFW_RELEASE}
+ * through Minecraft's handlers, and relies on {@link #maintainButtonState()} (called every tick) to
+ * keep continuous actions like mining alive while buttons are held.
  */
 public class InputInjector {
   private static final Logger LOGGER = LogUtils.getLogger();
@@ -32,24 +36,20 @@ public class InputInjector {
               GLFW.GLFW_KEY_RIGHT_SUPER,
               GLFW.GLFW_KEY_MENU));
 
-  // Key state tracking for press/release detection
-  private Set<Integer> previouslyPressedKeys = new HashSet<>();
-  private int previousModifiers = 0;
+  // Held key state (the set of keys currently considered down).
+  private Set<Integer> heldKeys = new HashSet<>();
+  private int currentModifiers = 0;
 
-  // Mouse button state tracking (bits: 0=left, 1=right, 2=middle)
-  private byte previousMouseButtons = 0;
+  // Held mouse button state (bits: 0=left, 1=right, 2=middle).
+  private byte heldMouseButtons = 0;
 
-  // Virtual mouse position (absolute coordinates from accumulated deltas)
+  // Virtual mouse position (absolute coordinates from accumulated deltas, used in menus).
   private double virtualMouseX = 0.0;
   private double virtualMouseY = 0.0;
   private boolean mouseInitialized = false;
 
-  /**
-   * Injects a RawInput into Minecraft's input handlers.
-   *
-   * @param input The raw input containing key codes, mouse data, and text
-   */
-  public void inject(RawInput input) {
+  /** Injects an {@link ActionMessage} by applying its edges in order: keys, mouse, buttons, scroll, text. */
+  public void inject(ActionMessage message) {
     Minecraft mc = Minecraft.getInstance();
     if (mc == null || mc.getWindow() == null) {
       LOGGER.warn("Cannot inject input - Minecraft not initialized");
@@ -58,51 +58,55 @@ public class InputInjector {
 
     long window = mc.getWindow().getWindow();
 
-    // 1. Handle key state changes via KeyboardHandler
-    handleKeyboardInput(mc, window, input.keyCodes());
+    // 1. Key edges (PRESS adds, RELEASE removes, unlisted = HOLD).
+    for (int code : message.keyPress()) {
+      pressKey(mc, window, code);
+    }
+    for (int code : message.keyRelease()) {
+      releaseKey(mc, window, code);
+    }
 
-    // 2. Handle mouse movement via MouseHandler.onMove
-    handleMouseMovement(mc, window, input.mouseDx(), input.mouseDy());
+    // 2. Mouse movement.
+    if (message.hasMouse()) {
+      handleMouseMovement(mc, window, message.mouseDx(), message.mouseDy());
+    }
 
-    // 3. Handle mouse buttons via MouseHandler.onPress
-    handleMouseButtons(mc, window, input.mouseButtons());
+    // 3. Mouse button edges.
+    if (message.hasButtons()) {
+      pressButtons(mc, window, message.buttonPress());
+      releaseButtons(mc, window, message.buttonRelease());
+    }
 
-    // 4. Handle scroll wheel via MouseHandler.onScroll
-    handleScrollWheel(mc, window, input.scrollDelta());
+    // 4. Scroll wheel.
+    if (message.hasScroll()) {
+      handleScrollWheel(mc, window, message.scroll());
+    }
 
-    // 5. Handle text input (for chat/signs)
-    handleTextInput(mc, input.text());
+    // 5. Text input (for chat / signs).
+    handleTextInput(mc, message.text());
   }
 
-  /**
-   * Handles keyboard input by detecting press/release transitions and calling
-   * KeyboardHandler.keyPress() for each event.
-   */
-  private void handleKeyboardInput(Minecraft mc, long window, int[] keyCodes) {
-    Set<Integer> currentKeys = Arrays.stream(keyCodes).boxed().collect(Collectors.toSet());
-
-    // Find modifier keys and non-modifier keys
-    Set<Integer> modifierKeys = findModifierKeys(currentKeys);
-    Set<Integer> nonModifierKeys =
-        currentKeys.stream().filter(key -> !modifierKeys.contains(key)).collect(Collectors.toSet());
-    int modifiers = computeModifiers(modifierKeys);
-
-    // Release keys that were pressed but are no longer
-    for (int key : previouslyPressedKeys) {
-      if (!nonModifierKeys.contains(key)) {
-        fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE, previousModifiers);
-      }
+  /** Presses a key: fires GLFW_PRESS for newly-held keys, updates held state and modifiers. */
+  private void pressKey(Minecraft mc, long window, int keyCode) {
+    if (heldKeys.contains(keyCode)) {
+      return; // already held -> HOLD, no event
     }
+    Set<Integer> newHeld = new HashSet<>(heldKeys);
+    newHeld.add(keyCode);
+    int modifiers = computeModifiers(findModifierKeys(newHeld));
+    fireKeyEvent(mc, window, keyCode, GLFW.GLFW_PRESS, modifiers);
+    heldKeys.add(keyCode);
+    currentModifiers = computeModifiers(findModifierKeys(heldKeys));
+  }
 
-    // Press keys that are newly pressed
-    for (int key : nonModifierKeys) {
-      if (!previouslyPressedKeys.contains(key)) {
-        fireKeyEvent(mc, window, key, GLFW.GLFW_PRESS, modifiers);
-      }
+  /** Releases a key: fires GLFW_RELEASE for previously-held keys, updates held state and modifiers. */
+  private void releaseKey(Minecraft mc, long window, int keyCode) {
+    if (!heldKeys.contains(keyCode)) {
+      return; // not held -> nothing to release
     }
-
-    previouslyPressedKeys = nonModifierKeys;
-    previousModifiers = modifiers;
+    fireKeyEvent(mc, window, keyCode, GLFW.GLFW_RELEASE, currentModifiers);
+    heldKeys.remove(keyCode);
+    currentModifiers = computeModifiers(findModifierKeys(heldKeys));
   }
 
   /** Fires a key event through Minecraft's KeyboardHandler. */
@@ -116,27 +120,25 @@ public class InputInjector {
         action == GLFW.GLFW_PRESS ? "PRESS" : "RELEASE",
         modifiers);
 
-    // Call the same handler that GLFW callbacks use
     mc.keyboardHandler.keyPress(window, keyCode, scanCode, action, modifiers);
   }
 
-  /*
+  /**
    * Finds all modifier keys in a set of keys.
    *
-   * @param keys The set of keys to search
-   * @return The set of modifier keys, or an empty set if every key is a modifier
+   * <p>If every key in the set is a modifier, returns an empty set so that a lone modifier press is
+   * treated as a plain key press (mods = 0) rather than self-modifying.
    */
   private Set<Integer> findModifierKeys(Set<Integer> keys) {
     Set<Integer> modifiers =
         keys.stream().filter(MODIFIER_KEYS::contains).collect(Collectors.toSet());
-    // If every key is a modifier, treat as "not used as modifier" so return empty set
     if (!modifiers.isEmpty() && modifiers.size() == keys.size()) {
       return Collections.emptySet();
     }
     return modifiers;
   }
 
-  /** Computes current modifier key state based on pressed keys. */
+  /** Computes the GLFW modifier bitmask for a set of modifier key codes. */
   private int computeModifiers(Set<Integer> modifierKeys) {
     int mods = 0;
     if (modifierKeys.contains(GLFW.GLFW_KEY_LEFT_SHIFT)
@@ -152,6 +154,36 @@ public class InputInjector {
       mods |= GLFW.GLFW_MOD_ALT;
     }
     return mods;
+  }
+
+  /** Presses the mouse buttons set in {@code pressMask} (bits 0-2: left, right, middle). */
+  private void pressButtons(Minecraft mc, long window, int pressMask) {
+    for (int button = 0; button < 3; button++) {
+      if ((pressMask & (1 << button)) == 0) {
+        continue;
+      }
+      if ((heldMouseButtons & (1 << button)) != 0) {
+        continue; // already held -> HOLD
+      }
+      LOGGER.debug("Mouse button: button={}, action=PRESS", button);
+      mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, currentModifiers);
+      heldMouseButtons |= (byte) (1 << button);
+    }
+  }
+
+  /** Releases the mouse buttons set in {@code releaseMask} (bits 0-2: left, right, middle). */
+  private void releaseButtons(Minecraft mc, long window, int releaseMask) {
+    for (int button = 0; button < 3; button++) {
+      if ((releaseMask & (1 << button)) == 0) {
+        continue;
+      }
+      if ((heldMouseButtons & (1 << button)) == 0) {
+        continue; // not held -> nothing to release
+      }
+      LOGGER.debug("Mouse button: button={}, action=RELEASE", button);
+      mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, currentModifiers);
+      heldMouseButtons &= (byte) ~(1 << button);
+    }
   }
 
   /**
@@ -188,44 +220,13 @@ public class InputInjector {
     double sensitivityCubed = sensitivity * sensitivity * sensitivity * 8.0;
 
     // Convert pixel deltas to rotation deltas (matching Minecraft's turnPlayer logic)
-    // deltaX affects yaw (horizontal), deltaY affects pitch (vertical)
     double yawDelta = deltaX * sensitivityCubed;
     double pitchDelta = deltaY * sensitivityCubed;
 
     LOGGER.debug(
         "Mouse move: delta=({}, {}), yaw={}, pitch={}", deltaX, deltaY, yawDelta, pitchDelta);
 
-    // Directly rotate the player
-    // turn(yRot, xRot) where yRot is yaw change and xRot is pitch change
     mc.player.turn(yawDelta, pitchDelta);
-  }
-
-  /**
-   * Handles mouse button state changes.
-   *
-   * <p>For continuous actions like mining, we fire press events every tick while held, and only
-   * fire release events on actual release transitions.
-   */
-  private void handleMouseButtons(Minecraft mc, long window, byte currentButtons) {
-    int modifiers = previousModifiers;
-
-    // Check each button (0=left, 1=right, 2=middle)
-    for (int button = 0; button < 3; button++) {
-      boolean wasDown = (previousMouseButtons & (1 << button)) != 0;
-      boolean isDown = (currentButtons & (1 << button)) != 0;
-
-      if (isDown) {
-        // Fire press event every tick while held (for continuous actions)
-        LOGGER.debug("Mouse button: button={}, action=PRESS (continuous)", button);
-        mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, modifiers);
-      } else if (wasDown) {
-        // Only fire release when transitioning from down to up
-        LOGGER.debug("Mouse button: button={}, action=RELEASE", button);
-        mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, modifiers);
-      }
-    }
-
-    previousMouseButtons = currentButtons;
   }
 
   /** Handles scroll wheel input by calling MouseHandler.onScroll(). */
@@ -235,9 +236,6 @@ public class InputInjector {
     }
 
     LOGGER.debug("Scroll: delta={}", scrollDelta);
-
-    // Call the same handler that GLFW scroll callbacks use
-    // xOffset is typically 0 for vertical scrolling, yOffset is the scroll amount
     mc.mouseHandler.onScroll(window, 0.0, (double) scrollDelta);
   }
 
@@ -262,28 +260,28 @@ public class InputInjector {
     }
   }
 
-  /** Resets all input state. Call this when disconnecting or cleaning up. */
+  /** Resets all input state. Call this on RESET, disconnect, or cleanup. */
   public void reset() {
     Minecraft mc = Minecraft.getInstance();
     if (mc != null && mc.getWindow() != null) {
       long window = mc.getWindow().getWindow();
 
-      // Release all pressed keys
-      for (int key : previouslyPressedKeys) {
-        fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE, previousModifiers);
+      // Release all held keys
+      for (int key : heldKeys) {
+        fireKeyEvent(mc, window, key, GLFW.GLFW_RELEASE, currentModifiers);
       }
 
-      // Release all pressed mouse buttons
+      // Release all held mouse buttons
       for (int button = 0; button < 3; button++) {
-        if ((previousMouseButtons & (1 << button)) != 0) {
-          mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, previousModifiers);
+        if ((heldMouseButtons & (1 << button)) != 0) {
+          mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, currentModifiers);
         }
       }
     }
 
-    previouslyPressedKeys.clear();
-    previousModifiers = 0;
-    previousMouseButtons = 0;
+    heldKeys.clear();
+    currentModifiers = 0;
+    heldMouseButtons = 0;
     mouseInitialized = false;
 
     LOGGER.info("InputInjector reset");
@@ -299,24 +297,24 @@ public class InputInjector {
     return virtualMouseY;
   }
 
-  /** Gets the set of currently pressed key codes. */
-  public Set<Integer> getPressedKeys() {
-    return new HashSet<>(previouslyPressedKeys);
+  /** Gets the set of currently held key codes. */
+  public Set<Integer> getHeldKeys() {
+    return new HashSet<>(heldKeys);
   }
 
   /** Gets the current modifier key state. */
   public int getModifiers() {
-    return previousModifiers;
+    return currentModifiers;
   }
 
-  /** Gets the current mouse button state. */
-  public byte getMouseButtons() {
-    return previousMouseButtons;
+  /** Gets the current held mouse button bitmask (bits 0-2: left, right, middle). */
+  public byte getHeldMouseButtons() {
+    return heldMouseButtons;
   }
 
   /**
    * Maintains continuous button state by firing press events every tick. This must be called every
-   * tick to simulate holding a mouse button.
+   * tick to simulate holding a mouse button (e.g. for mining).
    */
   public void maintainButtonState() {
     Minecraft mc = Minecraft.getInstance();
@@ -325,21 +323,20 @@ public class InputInjector {
     }
 
     // If any buttons are held, fire press events to maintain the state
-    if (previousMouseButtons != 0) {
+    if (heldMouseButtons != 0) {
       long window = mc.getWindow().getWindow();
-      int modifiers = previousModifiers;
 
       for (int button = 0; button < 3; button++) {
-        if ((previousMouseButtons & (1 << button)) != 0) {
-          mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, modifiers);
+        if ((heldMouseButtons & (1 << button)) != 0) {
+          mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, currentModifiers);
         }
       }
     }
 
     // Also set KeyMapping states as backup
     if (mc.options != null) {
-      boolean leftDown = (previousMouseButtons & 1) != 0;
-      boolean rightDown = (previousMouseButtons & 2) != 0;
+      boolean leftDown = (heldMouseButtons & 1) != 0;
+      boolean rightDown = (heldMouseButtons & 2) != 0;
       mc.options.keyAttack.setDown(leftDown);
       mc.options.keyUse.setDown(rightDown);
     }

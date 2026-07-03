@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from mineagent.client.connection import AsyncMinecraftClient, ConnectionConfig
-from mineagent.client.protocol import RawInput
+from mineagent.client.protocol import ActionMessage
 
 FRAME_WIDTH = 2
 FRAME_HEIGHT = 2
@@ -119,12 +119,12 @@ async def test_disconnect(client):
 
 @pytest.mark.asyncio
 async def test_send_action(client):
-    raw_input = RawInput(key_codes=[87], mouse_dx=1.0, mouse_dy=-1.0)
-    expected_bytes = raw_input.to_bytes()
+    message = ActionMessage(key_press=[87], has_mouse=True, mouse_dx=1.0, mouse_dy=-1.0)
+    expected_bytes = message.to_bytes()
 
     _, writer = await _connect_client(client)
 
-    result = await client.send_action(raw_input)
+    result = await client.send_action(message)
 
     assert result is True
     writer.write.assert_called_once_with(expected_bytes)
@@ -133,7 +133,7 @@ async def test_send_action(client):
 
 @pytest.mark.asyncio
 async def test_send_action_not_connected(client):
-    result = await client.send_action(RawInput())
+    result = await client.send_action(ActionMessage())
     assert result is False
 
 

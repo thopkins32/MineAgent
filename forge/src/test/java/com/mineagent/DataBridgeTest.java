@@ -29,39 +29,48 @@ class DataBridgeTest {
   }
 
   @Test
-  void setLatestRawInput_andGetLatestRawInput_getAndSetBehavior() {
-    RawInput input1 = new RawInput(new int[] {65}, 1.0f, 2.0f, (byte) 1, 0.5f, "test");
-    RawInput input2 = new RawInput(new int[] {66}, 3.0f, 4.0f, (byte) 2, 1.0f, "test2");
+  void setLatestAction_andGetLatestAction_getAndSetBehavior() {
+    ActionMessage input1 =
+        new ActionMessage(
+            ActionMessage.MSG_TYPE_ACTION, new int[] {65}, new int[0], false, 0f, 0f,
+            false, 0, 0, false, 0f, "");
+    ActionMessage input2 =
+        new ActionMessage(
+            ActionMessage.MSG_TYPE_ACTION, new int[] {66}, new int[0], false, 0f, 0f,
+            false, 0, 0, false, 0f, "");
 
     // Set first input
-    dataBridge.setLatestRawInput(input1);
+    dataBridge.setLatestAction(input1);
 
     // Get should return and clear
-    RawInput retrieved = dataBridge.getLatestRawInput();
+    ActionMessage retrieved = dataBridge.getLatestAction();
     assertEquals(input1, retrieved);
 
     // Get again should return null (was cleared)
-    RawInput retrieved2 = dataBridge.getLatestRawInput();
+    ActionMessage retrieved2 = dataBridge.getLatestAction();
     assertNull(retrieved2);
 
     // Set second input
-    dataBridge.setLatestRawInput(input2);
+    dataBridge.setLatestAction(input2);
 
     // Get should return second input
-    RawInput retrieved3 = dataBridge.getLatestRawInput();
+    ActionMessage retrieved3 = dataBridge.getLatestAction();
     assertEquals(input2, retrieved3);
   }
 
   @Test
-  void integration_setLatestRawInputThenGetAndSendObservation() {
+  void integration_setLatestActionThenGetAndSendObservation() {
     dataBridge.setNetworkHandler(mockNetworkHandler);
 
-    // Set raw input
-    RawInput input = new RawInput(new int[] {65, 66}, 10.0f, 20.0f, (byte) 1, 5.0f, "hello");
-    dataBridge.setLatestRawInput(input);
+    // Set action
+    ActionMessage input =
+        new ActionMessage(
+            ActionMessage.MSG_TYPE_ACTION, new int[] {65, 66}, new int[0], true, 10.0f,
+            20.0f, true, 1, 0, true, 5.0f, "hello");
+    dataBridge.setLatestAction(input);
 
-    // Get raw input
-    RawInput retrieved = dataBridge.getLatestRawInput();
+    // Get action
+    ActionMessage retrieved = dataBridge.getLatestAction();
     assertEquals(input, retrieved);
 
     // Send observation

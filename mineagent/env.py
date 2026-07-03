@@ -10,8 +10,9 @@ from gymnasium import spaces
 from .client import (
     AsyncMinecraftClient,
     ConnectionConfig,
-    RawInput,
-    action_to_raw_input,
+    ActionMessage,
+    NUM_KEYS,
+    held_state_diff,
     make_action_space,
 )
 
@@ -22,7 +23,6 @@ class MinecraftEnvConfig:
 
     frame_width: int = 320
     frame_height: int = 240
-    max_steps: int = 10_000
 
 
 class MinecraftEnv(gym.Env):
@@ -59,6 +59,12 @@ class MinecraftEnv(gym.Env):
         )
 
         self.action_space = make_action_space()
+
+        # Held-state register: the agent emits absolute desired state each
+        # step; the env diffs this against the register to produce the
+        # PRESS/RELEASE edges that go on the wire. Java mirrors this state.
+        self._held_keys = np.zeros(NUM_KEYS, dtype=np.int8)
+        self._held_buttons = np.zeros(3, dtype=np.int8)
 
         self._step_count = 0
         self._last_reward: float = 0.0
@@ -105,7 +111,10 @@ class MinecraftEnv(gym.Env):
         if not self._client.connected:
             self._run_async(self._client.connect())
 
-        self._run_async(self._client.send_action(RawInput.release_all()))
+        # Reset Java's held state and zero the local register in lockstep.
+        self._held_keys = np.zeros(NUM_KEYS, dtype=np.int8)
+        self._held_buttons = np.zeros(3, dtype=np.int8)
+        self._run_async(self._client.send_action(ActionMessage.reset()))
 
         obs = self._run_async(self._client.receive_observation())
         frame = obs.frame
@@ -118,8 +127,8 @@ class MinecraftEnv(gym.Env):
     def step(
         self, action: dict[str, np.ndarray]
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        raw_input = action_to_raw_input(action)
-        self._run_async(self._client.send_action(raw_input))
+        message = self._action_to_message(action)
+        self._run_async(self._client.send_action(message))
         obs = self._run_async(self._client.receive_observation())
         frame = obs.frame
         reward = obs.reward
@@ -128,14 +137,46 @@ class MinecraftEnv(gym.Env):
         self._step_count += 1
 
         terminated = False
-        truncated = self._step_count >= self.env_config.max_steps
-
         info = {
             "step_count": self._step_count,
             "reward": reward,
         }
 
-        return frame, reward, terminated, truncated, info
+        return frame, reward, terminated, False, info
+
+    def _action_to_message(self, action: dict[str, np.ndarray]) -> ActionMessage:
+        """Translate an absolute-state action dict into an event-based wire
+        message by diffing against the held-state register, then advance the
+        register to the new desired state."""
+        new_keys = np.asarray(action["keys"], dtype=np.int8).ravel()
+        new_buttons = np.asarray(action["mouse_buttons"], dtype=np.int8).ravel()
+
+        key_press, key_release, button_press, button_release = held_state_diff(
+            self._held_keys, new_keys, self._held_buttons, new_buttons
+        )
+
+        mouse_dx = float(action["mouse_dx"])
+        mouse_dy = float(action["mouse_dy"])
+        scroll = float(action["scroll_delta"])
+
+        message = ActionMessage(
+            key_press=list(key_press),
+            key_release=list(key_release),
+            has_mouse=(mouse_dx != 0.0 or mouse_dy != 0.0),
+            mouse_dx=mouse_dx,
+            mouse_dy=mouse_dy,
+            has_buttons=(button_press != 0 or button_release != 0),
+            button_press=button_press,
+            button_release=button_release,
+            has_scroll=(scroll != 0.0),
+            scroll=scroll,
+        )
+
+        # Advance the register to the agent's desired held state.
+        self._held_keys = new_keys
+        self._held_buttons = new_buttons
+
+        return message
 
     def render(self, mode: str = "rgb_array") -> np.ndarray | None:
         raise NotImplementedError("Rendering is not supported.")
